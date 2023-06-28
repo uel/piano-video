@@ -2,8 +2,6 @@ import os
 import cv2
 import numpy as np
 from data import GetPointsFromXML
-import keras
-import random
 import matplotlib.pyplot as plt
 import albumentations as A
 from keras.models import Sequential, load_model
