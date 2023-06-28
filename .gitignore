@@ -1,0 +1,7 @@
+.vscode
+*.exe
+data/all_*
+data/keyboard_frames
+data/videos/*
+model*
+__pycache__/*
