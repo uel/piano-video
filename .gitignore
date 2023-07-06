@@ -1,7 +1,6 @@
-.vscode
+__pycache__/*
+.*
 *.exe
 data/0_raw/*
 data/1_intermediate/*
 models/*
-__pycache__/*
-.old/*

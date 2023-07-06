@@ -30,7 +30,7 @@ def GetPointsFromXML(file):
     res = np.array(res).astype(np.int32)
     return res, images
 
-def Resize(input_folder, output_folder, target_shape=(360, 640)):
+def Resize(input_folder, output_folder, target_shape=(180, 320)):
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
 
@@ -47,9 +47,9 @@ def Resize(input_folder, output_folder, target_shape=(360, 640)):
         resized_image = cv2.resize(image, (target_width, target_height))
 
         # Place the resized image on a black background
-        background = np.zeros((360, 640, 3), dtype=np.uint8)
-        x_offset = (640 - target_width) // 2
-        y_offset = (360 - target_height) // 2
+        background = np.zeros((target_shape[0], target_shape[1], 3), dtype=np.uint8)
+        x_offset = (target_shape[1] - target_width) // 2
+        y_offset = (target_shape[0] - target_height) // 2
         background[y_offset:y_offset+target_height, x_offset:x_offset+target_width] = resized_image
 
         cv2.imwrite(os.path.join(output_folder, filename), background)
@@ -72,22 +72,17 @@ def Augment(input_folder, output_folder, num_augmentations=1):
             transformed = transformed["image"]
             cv2.imwrite(os.path.join(output_folder, f'{name}_aug{i}{ext}'), transformed)
 
-# sorted by filename
-def CopyNFiles(input_dir, output_dir, n):
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-
-    files = sorted(os.listdir(input_dir))
-    for i in range(n):
-        shutil.copy(os.path.join(input_dir, files[i]), output_dir)
-
 def KeyboardDetectorData():
     data_dir = r'data/1_intermediate/keyboard_detector/'
     Resize(data_dir+'separated/with_keyboard', data_dir+'resized/with_keyboard')
     Resize(data_dir+'separated/without_keyboard', data_dir+'resized/without_keyboard')
     Augment(data_dir+'resized/with_keyboard', data_dir+'augmented/with_keyboard', 1)
     Augment(data_dir+'resized/without_keyboard', data_dir+'augmented/without_keyboard', 1)
+    shutil.copytree(data_dir+'augmented/with_keyboard', 'data/2_final/keyboard_detector/with_keyboard', dirs_exist_ok=True)
+    shutil.copytree(data_dir+'augmented/without_keyboard', 'data/2_final/keyboard_detector/without_keyboard', dirs_exist_ok=True)
 
-    file_count = min(len(os.listdir(data_dir+'augmented/with_keyboard')), len(os.listdir(data_dir+'augmented/without_keyboard')))
-    CopyNFiles(data_dir+'augmented/with_keyboard', 'data/2_final/keyboard_detector/with_keyboard', file_count)
-    CopyNFiles(data_dir+'augmented/without_keyboard', 'data/2_final/keyboard_detector/without_keyboard', file_count)
+KeyboardDetectorData()
+
+
+
+
