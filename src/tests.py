@@ -2,9 +2,8 @@ import os
 import cv2
 import keyboard_locator
 import numpy as np
-from data.data import GetPointsFromXML
-from keys import preprocess_image
 import matplotlib.pyplot as plt
+import key_matcher
 
 def t2i(t):
     return tuple(int(x) for x in t)
@@ -13,9 +12,9 @@ def t2i(t):
 def KeyboardDetectionTest(has_keyboard):
     total_frames = 0
     correct_frames = 0
-    for file in os.listdir("data/separated_frames/with_keyboard"):
+    for file in os.listdir("data/1_intermediate/keyboard_detector/separated/with_keyboard"):
         if file.endswith(".jpg"):
-            img = cv2.imread("data/separated_frames/with_keyboard/" + file)
+            img = cv2.imread("data/1_intermediate/keyboard_detector/separated/with_keyboard/" + file)
             total_frames += 1
             if has_keyboard(img):
                 correct_frames += 1
@@ -25,9 +24,9 @@ def KeyboardDetectionTest(has_keyboard):
 
     total_frames = 0
     correct_frames = 0
-    for file in os.listdir("data/separated_frames/without_keyboard"):
+    for file in os.listdir("data/1_intermediate/keyboard_detector/separated/without_keyboard"):
         if file.endswith(".jpg"):
-            img = cv2.imread("data/separated_frames/without_keyboard/" + file)
+            img = cv2.imread("data/1_intermediate/keyboard_detector/separated/without_keyboard/" + file)
             total_frames += 1
             if not has_keyboard(img):
                 correct_frames += 1
@@ -70,11 +69,8 @@ def KeyboardBoundingBoxTest(get_bounding_box):
     print()
 
 def TemplateMatchingWrapper(img):
-    scale = 0.25
-    img = cv2.resize(img, (int(img.shape[1] * scale), int(img.shape[0] * scale)))
-    top_left, bottom_right, max_val = keyboard_locator.DetectKeyboardTemplateMatching(img)
-    #print(max_val)
-    return max_val > 0.87
+    matcher = key_matcher.KeyMatcher()
+    return matcher.ContainsKeyboard(img)
 
 bounding_box_model = None
 def NNBoundingBoxWrapper(image):
@@ -104,13 +100,13 @@ def NNDetectionWrapper(image):
 
     return detection_model.predict(np.array([img]), verbose=0)[0][0] > 0.5
 
-#KeyboardDetectionTest(TemplateMatchingWrapper)
-#KeyboardBoundingBoxTest(TemplateMatchingBoundingBoxWrapper)
-#KeyboardDetectionTest(NNDetectionWrapper)
+KeyboardDetectionTest(TemplateMatchingWrapper)
+# KeyboardBoundingBoxTest(TemplateMatchingBoundingBoxWrapper)
+# KeyboardDetectionTest(NNDetectionWrapper)
 
-tmmodel = keyboard_locator.KeyboardLocator()
-print("Template matching bounding box model: ")
-KeyboardBoundingBoxTest(tmmodel.LocateKeyboard)
+# tmmodel = keyboard_locator.KeyboardLocator()
+# print("Template matching bounding box model: ")
+# KeyboardBoundingBoxTest(tmmodel.LocateKeyboard)
 
 # print("Keyboard location processing: ")
 # KeyboardLocationProcessingTest(tmmodel.LocateKeyboard)

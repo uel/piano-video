@@ -4,3 +4,4 @@ __pycache__/*
 data/0_raw/*
 data/1_intermediate/*
 models/*
+notes.txt
