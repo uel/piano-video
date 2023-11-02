@@ -78,21 +78,14 @@ def KeyboardFrames(input_folder, output_folder):
     all_files = sorted(list(set(list(subfiles) + list(files))))
 
     for filename in all_files:
-        name = os.path.splitext(os.path.basename(filename))[0]
-        if os.path.exists(os.path.join(output_folder, name+'.jpg')): continue
-
         video = PianoVideo(filename)
         t = time.time()
-        img = video.get_piano_mp()
+        video.background
+        video.hand_landmarks
+        video.transcribed_midi
         print(f'{filename} {time.time()-t}')
-        if img is None:
-            continue
 
-        if img.size == 1:
-            print(f"get_piano_mp returned none for {filename}")
-            continue
-        
-        cv2.imwrite(os.path.join(output_folder, name+'.jpg'), img)
+ 
 
 
 def KeyboardDetectorData():
@@ -111,4 +104,4 @@ def KeyboardDetectorData():
 # cv2.imshow("w", keys)
 # cv2.waitKey(0)
 
-KeyboardFrames('data/0_raw/all_videos/flowkey – Learn piano', 'data/1_intermediate/keyboard_frames_MP')
+KeyboardFrames('data/0_raw/all_videos/flowkey – Learn piano', 'data/1_intermediate/background')

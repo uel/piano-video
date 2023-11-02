@@ -26,7 +26,7 @@ def segment_keys(image, key_matcher):  # TODO: test white key detection on diffe
     masks = key_masks(image, midi_boxes)
 
     #show_masks(image, masks)
-    show_boxes(image, midi_boxes)
+    # show_boxes(image, midi_boxes)
 
     return midi_boxes, masks
 

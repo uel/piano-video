@@ -5,10 +5,9 @@ from typing import Callable
 import numpy as np
 import cv2
 from intervaltree import IntervalTree
-from mido import MidiFile
 import os
 import json
-
+import logging
 
 class PianoVideo():
     def __init__(self, path, cache_path="data/1_intermediate") -> None:
@@ -57,7 +56,7 @@ class PianoVideo():
     @property
     def detector(self):
         if self._detector is None:
-            from key_matcher import KeyMatcher
+            from key_matcher import FeatureKeyMatcher, KeyMatcher
             self._detector = KeyMatcher()
         return self._detector
     
@@ -170,6 +169,7 @@ class PianoVideo():
         size = sum([i.end-i.begin for i in self.sections])
 
         if size < 10*self.fps: # at least 10 seconds of keyboard frames
+            logging.warning(f"Background not extracted, {self.file_name} has less than 10 seconds of keyboard frames")
             return None
 
         frames = []
@@ -180,7 +180,7 @@ class PianoVideo():
         for i, frame in self.get_video():
             landmark_result = next(landmarks)
             if not self.sections[i]: continue
-            if len(landmark_result) < 2: continue
+            #if len(landmark_result) < 2: continue
 
             frame = frame.astype(float)
             for hand in landmark_result:
@@ -210,67 +210,24 @@ class PianoVideo():
         #     cv2.imwrite(f".temp/{i}.png", frames[i].astype(np.uint8))
 
         self._background = np.nanmedian(frames, axis=(0)).astype(np.uint8)
+        if np.isnan(self._background).any():
+            logging.warning(f"NaN values in {self.file_name} background")
+
         cv2.imwrite(f"{self.cache_path}/background/{self.file_name}.png", self._background)
 
         return self._background
     
     @property
-    def key_segments(self):
+    def key_segments(self): # TODO: caching
         import keyboard_segmentation
         return keyboard_segmentation.segment_keys(self.background, self.detector)
                     
 
-    def get_piano(self):
-        '''Gets the frame of the piano using median of frames with the lowest saturation'''
-        if self._background is not None:
-            return self._background
-
-        if self.detector is None:
-            #self.detector = KeyboardDetector("models/detection.h5")
-            self.detector = KeyMatcher()
-
-        intervals = self.find_intervals(self.detector.ContainsKeyboard)
-        size = sum([i.end-i.begin for i in intervals])
-
-        if size < 10*self.fps: # at least 10 seconds of keyboard frames
-            return None
-
-        keyboard_frames = []
-        max_len = 1000 #500000000//(self.width*self.height*3) # adjust max_len to 1GB of memory
-        for i, frame in self.get_video():
-            ii = intervals[i]
-            if intervals[i]:
-                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HLS)
-                if len(keyboard_frames) == max_len:
-                    keyboard_frames[random.randint(0, max_len-1)] = frame
-                else:
-                    keyboard_frames.append(frame)
-
-        keyboard_frames = np.array(keyboard_frames)
-        # get saturation
-        saturation = keyboard_frames[:,:,:,1].astype(np.int16)
-        saturation = 127 - abs(127 - saturation)
-        low_sat = np.argsort(saturation, axis=0)[saturation.shape[0]//10]
-        self.piano_frame = np.zeros(frame.shape).astype(np.uint8)
-        for i in range(frame.shape[0]):
-            for j in range(frame.shape[1]):
-                self.piano_frame[i][j] = keyboard_frames[low_sat[i][j]][i][j]
-
-        self.piano_frame = cv2.cvtColor(self.piano_frame, cv2.COLOR_HLS2BGR)
-
-        cv2.imwrite(f"{self.cache_path}/background/{self.file_name}.png", self.piano_frame)
-        #self.piano_frame = np.median(keyboard_frames, axis=(0)).astype(np.uint8)
-        #self.piano_frame = cv2.cvtColor(self.piano_frame, cv2.COLOR_HSV2BGR)
-
-        #using mode instead of median
-        # mode, count = stats.mode(keyboard_frames, axis=0)
-        # self.piano_frame = mode[0].astype(np.uint8)
-        
-        return self.piano_frame
-
 #video = PianoVideo("demo/scarlatti.mp4")
-video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\Erik C 'Piano Man'\8xJdM4S-fko.mp4")
-midi_boxes, masks = video.key_segments
+# video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\Erik C 'Piano Man'\8xJdM4S-fko.mp4")
+# video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\flowkey – Learn piano\CRHexNAxnlU.mp4")
+# sections = video.sections
+# midi_boxes, masks = video.key_segments
 # print(time.time()-t0)
 # video.key_segments
 # print(time.time()-t0)

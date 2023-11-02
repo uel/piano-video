@@ -6,7 +6,9 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 from draw_landmarks import draw_landmarks_on_image
 
-video = piano_video.PianoVideo("demo/scarlatti.mp4")
+video_path = "data/0_raw/all_videos/flowkey – Learn piano/4PuLjxWdujM.mp4"
+
+video = piano_video.PianoVideo(video_path)
 midi_boxes, masks = video.key_segments
 midi = video.transcribed_midi
 
@@ -22,8 +24,8 @@ options = vision.HandLandmarkerOptions(base_options=base_options,
 
 landmarker = vision.HandLandmarker.create_from_options(options)
 
-cap = cv2.VideoCapture("demo/scarlatti.mp4")
-out = cv2.VideoWriter('demo/scarlatti_hands.avi',cv2.VideoWriter_fourcc(*"MJPG"), 30, (640, 360))
+cap = cv2.VideoCapture(video_path)
+# out = cv2.VideoWriter('demo/scarlatti_hands.avi',cv2.VideoWriter_fourcc(*"MJPG"), 30, (640, 360))
 
 i = 0
 while cap.isOpened():
@@ -37,9 +39,10 @@ while cap.isOpened():
 
         if midi[i]:
             for note in midi[i]:
-                frame[mask_dict[note[2][0]]] = (0, 255, 0)
+                if note[2][0] in mask_dict:
+                    frame[mask_dict[note[2][0]]] = (0, 255, 0)
         
-        out.write(frame)
+        # out.write(frame)
 
         cv2.imshow('frame', frame)
         cv2.waitKey(1)
@@ -48,5 +51,5 @@ while cap.isOpened():
         break
 
 cap.release()
-out.release()
+# out.release()
 cv2.destroyAllWindows()
