@@ -59,14 +59,14 @@ class PianoVideo():
             from key_matcher import FeatureKeyMatcher, KeyMatcher
             self._detector = KeyMatcher()
         return self._detector
-    
+
     # audio path, if doesn't exist use ffmpeg to extract audio
     @property
     def audio_path(self):
         if not os.path.exists(f"{self.cache_path}/audio/{self.file_name}.mp3"):
             os.system(f'ffmpeg -hide_banner -loglevel error -i "{self.path}" "{self.cache_path}/audio/{self.file_name}.mp3"')
         return f"{self.cache_path}/audio/{self.file_name}.mp3"
-    
+
     # sections, if doesn't exist use self.find_intervals(self.detector.ContainsKeyboard) and save to json
     @property
     def sections(self):
@@ -75,7 +75,7 @@ class PianoVideo():
             with open(f"{self.cache_path}/sections/{self.file_name}.json", 'w') as f:
                 json.dump(list(self._sections), f)
         return self._sections
-    
+
     @property
     def hand_landmarks(self):
         if not os.path.exists(f"{self.cache_path}/hand_landmarks/{self.file_name}.json"):
@@ -91,8 +91,8 @@ class PianoVideo():
                         self._hand_landmarks.append([i, d])
             with open(f"{self.cache_path}/hand_landmarks/{self.file_name}.json", 'w') as f:
                 json.dump(self._hand_landmarks, f)
-        
-        # generator function that returns empty list if no hand landmarks 
+
+        # generator function that returns empty list if no hand landmarks
         def landmarks_generator():
             current = 0
             for i in range(0, self.frame_count):
@@ -103,8 +103,8 @@ class PianoVideo():
                     yield []
 
         return landmarks_generator
-    
-    
+
+
     @property
     def transcribed_midi(self):
         if not os.path.exists(f"{self.cache_path}/transcribed_midi/{self.file_name}.json"):
@@ -141,10 +141,9 @@ class PianoVideo():
             i+=1
         cap.release()
 
-    def find_intervals(self, contains:Callable[[np.ndarray], bool], accuracy=.5):
+    def find_intervals(self, contains:Callable[[np.ndarray], bool], accuracy=10., min_length=30.):
         '''Finds intervals in video where contains is true given the frame'''
         intervals = IntervalTree()
-
         left = None
         for i, frame in self.get_video(accuracy):
             if contains(frame):
@@ -152,13 +151,42 @@ class PianoVideo():
                     left = i
             else:
                 if left is not None:
-                    intervals[left:i] = True
+                    intervals[left:i] = True # right is first index with stride accuracy where contains is false
                     left = None
 
-        if left is not None:
+        if left is not None and left != i:
             intervals[left:i] = True
-        
-        return intervals
+
+        if len(intervals) == 0: return intervals
+
+        # Refining
+        frame_acc = int(self.fps*accuracy)
+        sorted_intervals = sorted(intervals)
+        new_intervals = IntervalTree()
+
+        left, right, _ = sorted_intervals.pop(0)
+        for i, frame in self.get_video():
+
+            if left - frame_acc < i < left:
+                if contains(frame):
+                    left = i
+
+            if right-frame_acc < i <= right:
+                if contains(frame):
+                    right = i
+                else:
+                    if right - left > min_length*self.fps:
+                        new_intervals[left:right] = True
+
+                    if sorted_intervals:
+                        left, right, _ = sorted_intervals.pop(0)
+                    else:
+                        break
+                    
+        if right - left > min_length*self.fps:
+            new_intervals[left:right] = True
+
+        return new_intervals
 
     @property
     def background(self):
@@ -168,13 +196,12 @@ class PianoVideo():
 
         size = sum([i.end-i.begin for i in self.sections])
 
-        if size < 10*self.fps: # at least 10 seconds of keyboard frames
-            logging.warning(f"Background not extracted, {self.file_name} has less than 10 seconds of keyboard frames")
+        if size < 0.5*self.frame_count: # at least 50% of video must be piano
+            logging.warning(f"Background not extracted, {self.file_name} has less than 50% of keyboard frames")
             return None
 
         frames = []
-        nan_counts = np.zeros((self.width,)) # make sure there are no NaNs in result
-
+        non_nan_counts = np.zeros((self.width,)) # make sure there are no NaNs in result
         landmarks = self.hand_landmarks()
         handc = 0
         for i, frame in self.get_video():
@@ -183,6 +210,7 @@ class PianoVideo():
             #if len(landmark_result) < 2: continue
 
             frame = frame.astype(float)
+            not_nan = np.ones((self.width,), dtype=np.uint8) # 1 if not NaN, 0 if NaN
             for hand in landmark_result:
                 handc+=1
                 left = np.inf
@@ -196,36 +224,42 @@ class PianoVideo():
                 right = int(right*frame.shape[1])
                 right = min(frame.shape[1], right+10)
                 frame[:,left:right,:] = np.NAN
+                not_nan[left:right] = 0
 
-                frame = cv2.resize(frame, (640, int(640 / frame.shape[1] * frame.shape[0])))
+            frame = cv2.resize(frame, (640, int(640 / frame.shape[1] * frame.shape[0]))) # TODO: standard for scaling
 
+            if np.any(not_nan & ( non_nan_counts <= (min(non_nan_counts)+5) )):
                 if len(frames) > 200:
-                    frames[random.randint(0, 200)] = frame
+                    frames[random.randint(0, 200)] = frame # counts are not being removed
                 else:
                     frames.append(frame)
-                
-        
-        # print(handc)
-        # for i in range(len(frames)):
-        #     cv2.imwrite(f".temp/{i}.png", frames[i].astype(np.uint8))
+                non_nan_counts += not_nan
+
+            if min(non_nan_counts) > 30: break # 30 frames with unique non-nan values
 
         self._background = np.nanmedian(frames, axis=(0)).astype(np.uint8)
         if np.isnan(self._background).any():
             logging.warning(f"NaN values in {self.file_name} background")
 
+        # cv2.imshow('img', self._background)
+        # cv2.waitKey(0)
+
         cv2.imwrite(f"{self.cache_path}/background/{self.file_name}.png", self._background)
 
         return self._background
-    
+
     @property
     def key_segments(self): # TODO: caching
         import keyboard_segmentation
         return keyboard_segmentation.segment_keys(self.background, self.detector)
-                    
+
 
 #video = PianoVideo("demo/scarlatti.mp4")
 # video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\Erik C 'Piano Man'\8xJdM4S-fko.mp4")
-# video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\flowkey – Learn piano\CRHexNAxnlU.mp4")
+# video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\Liberty Park Music\3psRRVgGYdc.mp4")
+# video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\Paul Barton\NLPxfEMfnVM.mp4")
+# video.sections
+# pass
 # sections = video.sections
 # midi_boxes, masks = video.key_segments
 # print(time.time()-t0)
