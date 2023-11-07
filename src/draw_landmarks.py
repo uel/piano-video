@@ -24,12 +24,23 @@ def draw_landmarks_on_image(rgb_image, detection_result):
     hand_landmarks_proto.landmark.extend([
       landmark_pb2.NormalizedLandmark(x=landmark.x, y=landmark.y, z=landmark.z) for landmark in hand_landmarks
     ])
+
+    hand_landmark_style = solutions.drawing_styles.get_default_hand_landmarks_style()
+    hand_connection_style = solutions.drawing_styles.get_default_hand_connections_style()
+    spec = solutions.drawing_utils.DrawingSpec(color=(0, 0, 255), thickness=1, circle_radius=1)
+    for k in hand_connection_style:
+      hand_connection_style[k] = spec
+
+    for k in hand_landmark_style:
+      hand_landmark_style[k] = spec
+
     solutions.drawing_utils.draw_landmarks(
       annotated_image,
       hand_landmarks_proto,
       solutions.hands.HAND_CONNECTIONS,
-      solutions.drawing_styles.get_default_hand_landmarks_style(),
-      solutions.drawing_styles.get_default_hand_connections_style())
+      hand_landmark_style,
+      hand_connection_style
+      )
 
     # Get the top left corner of the detected hand's bounding box.
     height, width, _ = annotated_image.shape

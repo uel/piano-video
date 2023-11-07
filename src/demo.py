@@ -1,14 +1,17 @@
 import piano_video
 import cv2
+import numpy as np
 
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 from draw_landmarks import draw_landmarks_on_image
 
-video_path = "data/0_raw/all_videos/flowkey – Learn piano/4PuLjxWdujM.mp4"
+#video_path = "data/0_raw/all_videos/flowkey – Learn piano/4PuLjxWdujM.mp4"
+video_path = "demo/scarlatti.mp4"
 
 video = piano_video.PianoVideo(video_path)
+background = video.background
 midi_boxes, masks = video.key_segments
 midi = video.transcribed_midi
 
@@ -35,13 +38,16 @@ while cap.isOpened():
         image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image)
         results = landmarker.detect_for_video(image, (i*1000)//30)
-        frame = draw_landmarks_on_image(frame, results)
 
         if midi[i]:
+            background_mask = cv2.subtract(background, frame).sum(axis=2) < 100
+            colored = frame // 2 + (0, 128, 0)
             for note in midi[i]:
                 if note[2][0] in mask_dict:
-                    frame[mask_dict[note[2][0]]] = (0, 255, 0)
+                    mask = background_mask & mask_dict[note[2][0]]
+                    frame[mask] = colored[mask]
         
+        frame = draw_landmarks_on_image(frame, results)
         # out.write(frame)
 
         cv2.imshow('frame', frame)
