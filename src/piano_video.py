@@ -191,8 +191,8 @@ class PianoVideo():
     @property
     def background(self):
         '''Gets the frame of the piano using mediapipe hand landmarks'''
-        if self._background is not None:
-            return self._background
+        # if self._background is not None:
+        #     return self._background
 
         size = sum([i.end-i.begin for i in self.sections])
 
@@ -202,6 +202,7 @@ class PianoVideo():
 
         frames = []
         non_nan_counts = np.zeros((self.width,)) # make sure there are no NaNs in result
+        frame_count = 0
         landmarks = self.hand_landmarks()
         handc = 0
         for i, frame in self.get_video():
@@ -229,13 +230,13 @@ class PianoVideo():
             frame = cv2.resize(frame, (640, int(640 / frame.shape[1] * frame.shape[0]))) # TODO: standard for scaling
 
             if np.any(not_nan & ( non_nan_counts <= (min(non_nan_counts)+5) )):
-                if len(frames) > 200:
-                    frames[random.randint(0, 200)] = frame # counts are not being removed
+                frame_count += 1
+                if len(frames) >= 200:
+                    if min(non_nan_counts) > 200: break
+                    frames[frame_count%200] = frame # counts are not being removed,
                 else:
                     frames.append(frame)
                 non_nan_counts += not_nan
-
-            if min(non_nan_counts) > 30: break # 30 frames with unique non-nan values
 
         self._background = np.nanmedian(frames, axis=(0)).astype(np.uint8)
         if np.isnan(self._background).any():
@@ -255,10 +256,11 @@ class PianoVideo():
 
 
 #video = PianoVideo("demo/scarlatti.mp4")
-# video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\Erik C 'Piano Man'\8xJdM4S-fko.mp4")
+# video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\Erik C 'Piano Man'\gBMmUVzvl2U.mp4")
 # video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\Liberty Park Music\3psRRVgGYdc.mp4")
 # video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\Paul Barton\NLPxfEMfnVM.mp4")
-# video.sections
+video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\Jane\2cz5qP36g_Y.webm") 
+video.background
 # pass
 # sections = video.sections
 # midi_boxes, masks = video.key_segments
