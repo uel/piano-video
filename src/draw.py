@@ -10,14 +10,18 @@ FONT_THICKNESS = 1
 HANDEDNESS_TEXT_COLOR = (88, 205, 54) # vibrant green
 
 def draw_landmarks_on_image(rgb_image, detection_result):
-  hand_landmarks_list = detection_result.hand_landmarks
-  handedness_list = detection_result.handedness
+  if isinstance(detection_result, list):
+    hand_landmarks_list = []
+    for hand in detection_result:
+      hand_landmarks_list.append([landmark_pb2.NormalizedLandmark(x=landmark[0], y=landmark[1], z=landmark[2]) for landmark in hand])
+  else:
+    hand_landmarks_list = detection_result.hand_landmarks
+
   annotated_image = np.copy(rgb_image)
 
   # Loop through the detected hands to visualize.
   for idx in range(len(hand_landmarks_list)):
     hand_landmarks = hand_landmarks_list[idx]
-    handedness = handedness_list[idx]
 
     # Draw the hand landmarks.
     hand_landmarks_proto = landmark_pb2.NormalizedLandmarkList()
@@ -55,3 +59,34 @@ def draw_landmarks_on_image(rgb_image, detection_result):
     #             FONT_SIZE, HANDEDNESS_TEXT_COLOR, FONT_THICKNESS, cv2.LINE_AA)
 
   return annotated_image
+
+def show_masks(image, masks):
+    import random
+
+    for mask in masks:
+        random_color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+        image[mask] = random_color
+
+    cv2.imshow('img', cv2.resize(image, (0, 0), fx=2, fy=2))
+    cv2.waitKey(0)
+
+def draw_boxes(image, midi_boxes, show=False):
+    avg_white_width = np.mean([box[2]-box[0] for box, _, note in midi_boxes if not "#" in note])
+
+    for box, midi, note in midi_boxes:
+        if not "#" in note:
+            cv2.rectangle(image, (box[0], box[1]), (box[2], box[3]), (0, 0, 255), 1)
+            
+            fontsize = (avg_white_width/14.)*0.25
+            offset = int((avg_white_width/14.)*2.5)
+            cv2.putText(image, str(midi), (box[0]+offset, box[3]-offset), cv2.FONT_HERSHEY_SIMPLEX, fontsize, (0, 0, 255), 1)
+
+    for box, midi, note in midi_boxes:
+        if "#" in note:
+            cv2.rectangle(image, (box[0], box[1]), (box[2], box[3]), (0, 255, 0), 1)
+
+    if show:
+        cv2.imshow('img', cv2.resize(image, (0, 0), fx=2, fy=2))
+        cv2.waitKey(0)
+
+    return image

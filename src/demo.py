@@ -5,17 +5,18 @@ import numpy as np
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
-from draw_landmarks import draw_landmarks_on_image
+from draw import draw_landmarks_on_image
+from keyboard_segmentation import get_key_masks
 
 #video_path = "data/0_raw/all_videos/flowkey – Learn piano/4PuLjxWdujM.mp4"
 video_path = "demo/scarlatti.mp4"
 
 video = piano_video.PianoVideo(video_path)
 background = video.background
-midi_boxes, masks = video.key_segments
-midi = video.transcribed_midi
+midi_boxes = video.keys
+midi = video.fingers
 
-mask_dict = {midi_boxes[i][1]: masks[i] for i in range(len(midi_boxes))}
+# mask_dict = {midi_boxes[i][1]: masks[i] for i in range(len(midi_boxes))}
 
 base_options = python.BaseOptions(model_asset_path='models/hand_landmarker.task')
 options = vision.HandLandmarkerOptions(base_options=base_options, 
@@ -40,14 +41,21 @@ while cap.isOpened():
         results = landmarker.detect_for_video(image, (i*1000)//30)
 
         if midi[i]:
-            background_mask = cv2.subtract(background, frame).sum(axis=2) < 100
-            colored = frame // 2 + (0, 128, 0)
+            # background_mask = cv2.subtract(background, frame).sum(axis=2) < 100
+            # colored = frame // 2 + (0, 128, 0)
+            # for note in midi[i]:
+            #     if note[2][0] in mask_dict:
+            #         mask = background_mask & mask_dict[note[2][0]]
+            #         frame[mask] = colored[mask]
+
+            frame = draw_landmarks_on_image(frame, results)
+
             for note in midi[i]:
-                if note[2][0] in mask_dict:
-                    mask = background_mask & mask_dict[note[2][0]]
-                    frame[mask] = colored[mask]
-        
-        frame = draw_landmarks_on_image(frame, results)
+                if note[0]+5 > i and note.data[2][1]:
+                    x, y = (int(note.data[2][1][0]*frame.shape[1]), int(note.data[2][1][1]*frame.shape[0]))
+                    frame = cv2.circle(frame, (x, y), 3, (0, 255, 0), -1)
+                    print(note.data[2][0])
+
         # out.write(frame)
 
         cv2.imshow('frame', frame)

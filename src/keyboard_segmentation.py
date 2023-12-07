@@ -2,57 +2,52 @@ import cv2
 import numpy as np
 import logging
 
-visualize = False
-HALF_STRIP_HEIGHT = 5
-TOP_THRESH = 0.3
+VISUALIZE = False
+WHITE_KEY_B_THRESH = 0.7 # lightness multiplier for mean lightness of B/W key area
+WHITE_KEY_W_THRESH = 0.6 # lightness multiplier for mean lightness of W key area
+HALF_STRIP_HEIGHT = 5 # half the height of the strip used to find edges
+TOP_THRESH = 0.3 
 SIDES_THRESH = 0.5
 BLACK_KEY_BOTTOM_THRESH = 0.85
 BLACK_KEY_EDGE_THRESH = 0.5
 BLACK_KEY_BIG_GAP = 1.1 # gaps between black keys bigger that BLACK_KEY_BIG_GAP * mean_width are considered big gaps
+MIDDLE_C_LOC = 2.3 # middle C is a bit to the left of the middle
 
 def segment_keys(image, key_matcher):
-    res, (top, bottom) = key_matcher.GetBestTemplateMatch(image)
+    left, top, right, bottom = key_matcher.ContainsKeyboard(image)
 
-    # bottom 3/4rds of keys
     y_white = bottom - (bottom-top)//4
     y_black = top + (1*(bottom-top))//3
 
-    black_lightness = mean_lightness(image, y_black) * 0.7
-    white_lightness = mean_lightness(image, y_white) * 0.6
+    black_lightness = mean_lightness(image, y_black) * WHITE_KEY_B_THRESH
+    white_lightness = mean_lightness(image, y_white) * WHITE_KEY_W_THRESH
 
     white_keys_b = white_key_mask(image, black_lightness)
     white_keys_w = white_key_mask(image, white_lightness)
 
-    left, right = keyboard_sides(white_keys_w, y_white)
+    # left, right = keyboard_sides(white_keys_w, y_white)
 
+    # top, bottom = get_top_bottom(white_keys_b, left, right, y_white)
+    black_bottom = get_black_key_bottom(white_keys_b, left, right, y_black)
 
-    top, bottom = top_bottom(white_keys_b, left, right, y_white)
-    black_bottom = black_key_bottom(white_keys_b, left, right, y_black)
-
-    if visualize:
+    if VISUALIZE:
         img = cv2.rectangle(image.copy(), (left, top), (right, bottom), (0, 255, 0), 1)
         img = cv2.line(img, (left, y_black), (right, y_black), (0, 255, 0), 1)
         img = cv2.line(img, (left, black_bottom), (right, black_bottom), (0, 255, 0), 1)
         cv2.imshow('img', cv2.resize(img, (0, 0), fx=2, fy=2))
         cv2.waitKey(0)
 
+    labeled_keys = get_key_lines(white_keys_b, left, right, y_black)
 
-    labeled_edges = key_edges(image, white_keys_b, left, right, y_black)
+    boxes = make_bounding_boxes(labeled_keys, top, bottom, black_bottom, image.shape)
 
-    c_idx = get_middle_c(labeled_edges, left, right)
-
-    boxes = make_bounding_boxes(labeled_edges, top, bottom, black_bottom)
+    c_idx = get_middle_c(labeled_keys, left, right)
 
     midi_boxes = []
     for i, b in enumerate(boxes):
-        midi_boxes.append((b, 60 + i - c_idx, labeled_edges[i][2]))
-
-    masks = key_masks(white_keys_b, midi_boxes)
-
-    #show_masks(image, masks)
-    # show_boxes(image, midi_boxes)
-
-    return midi_boxes, masks
+        midi_boxes.append((labeled_keys[i][2], 60 + i - c_idx, b))
+        
+    return midi_boxes
 
 def mean_lightness(image, y):
     # average brightness of white keys
@@ -62,31 +57,24 @@ def mean_lightness(image, y):
 
 
 def white_key_mask(image, mean_lightness):
-    # use hsv
     hls = cv2.cvtColor(image, cv2.COLOR_BGR2HLS)
     mask = cv2.inRange(hls, (0, mean_lightness, 0), (255, 255, 255))//255
-    # cv2.imshow("window", mask)
-    # cv2.waitKey(0)
-    # mask = cv2.inRange(image, (150, 150, 150), (255, 255, 255))//255
     return mask
 
 def keyboard_sides(white_keys, white_y):
     # pixels around the keys
     white_keys = white_keys[white_y-HALF_STRIP_HEIGHT:white_y+HALF_STRIP_HEIGHT, :]
 
-    if visualize:
+    if VISUALIZE:
         img = white_keys.copy()*255
         cv2.imshow('img', cv2.resize(img, (0, 0), fx=2, fy=2))
         cv2.waitKey(0)
 
-    # move from center until large black area is found
-    # if sum of 5x10 area is < 30 set middle x of area as the edge
-    # use sum and convolution to find edges
     white_keys = np.sum(white_keys, axis=0)
     white_keys = np.convolve(white_keys, np.ones(HALF_STRIP_HEIGHT), mode='same')
     white_keys = white_keys <= 2*HALF_STRIP_HEIGHT*HALF_STRIP_HEIGHT*SIDES_THRESH
 
-    if visualize:
+    if VISUALIZE:
         img = white_keys.copy()*255
         img = np.array([img]*2*HALF_STRIP_HEIGHT, dtype=np.uint8)
         cv2.imshow('img', img)
@@ -103,7 +91,7 @@ def keyboard_sides(white_keys, white_y):
 
     return left, right
 
-def top_bottom(white_key_mask, left, right, white_y):
+def get_top_bottom(white_key_mask, left, right, white_y):
     white_key_mask = white_key_mask[:, left:right]
     whites = np.sum(white_key_mask, axis=1)
 
@@ -121,24 +109,21 @@ def top_bottom(white_key_mask, left, right, white_y):
 
     return top, bottom
 
-def black_key_bottom(white_key_mask, left, right, black_y):
+def get_black_key_bottom(white_key_mask, left, right, black_y):
     white_key_mask = white_key_mask[:, left:right]
     whites = np.sum(white_key_mask, axis=1)
     for i in range(black_y, white_key_mask.shape[0]):
         if whites[i] > (right-left)*BLACK_KEY_BOTTOM_THRESH:
             return i
 
-
-key_order = ["C", "D", "E", "F", "G", "A", "B"]
-
-def key_edges(image, white_key_mask, left, right, black_y):
+def get_black_key_lines(top_keys, black_y, left, right):
     # top part of keys
-    top_keys = white_key_mask[black_y-HALF_STRIP_HEIGHT:black_y+HALF_STRIP_HEIGHT, :]
+    top_keys = top_keys[black_y-HALF_STRIP_HEIGHT:black_y+HALF_STRIP_HEIGHT, :]
     top_keys = np.sum(top_keys, axis=0)
     top_keys = np.convolve(top_keys, np.ones(5), mode='same')
     top_keys = top_keys <= 2*HALF_STRIP_HEIGHT*HALF_STRIP_HEIGHT*BLACK_KEY_EDGE_THRESH
 
-    if visualize:
+    if VISUALIZE:
         img = top_keys.copy()*255
         img = np.array([img]*2*HALF_STRIP_HEIGHT, dtype=np.uint8)
         cv2.imshow('img', img)
@@ -156,19 +141,15 @@ def key_edges(image, white_key_mask, left, right, black_y):
         logging.warning("No lines found")
         return []
 
-    if visualize:
+    if VISUALIZE:
         for line in lines:
             cv2.line(image, (line[0], black_y-3), (line[0], black_y+3), (0, 255, 0), 1)
         cv2.imshow('img', cv2.resize(image, (0, 0), fx=2, fy=2))
         cv2.waitKey(0)
+    
+    return lines
 
-    black_keys = []
-    for i in range(len(lines)-1):
-        if lines[i][1]:
-            black_keys.append((lines[i][0], lines[i+1][0]))
-
-    avg_width = np.mean([black_keys[i+1][0] - black_keys[i][1] for i in range(len(black_keys)-1)])
-
+def get_black_key_groups(black_keys, avg_width):
     black_key_groups = []
     group = []
     for i in range(len(black_keys)):
@@ -182,10 +163,44 @@ def key_edges(image, white_key_mask, left, right, black_y):
 
     # middle 2 group
     middle_2_group = -1
-    for i in range(len(black_key_groups)//2, len(black_key_groups)):
+    for i in range(len(black_key_groups)//2-1, len(black_key_groups)):
         if len(black_key_groups[i]) == 2:
             middle_2_group = i
+            break
 
+    # resize groups so that they are varying between 2 and 3
+    groups = []
+    middle_2_key = black_keys.index(black_key_groups[middle_2_group][0])
+
+    i = middle_2_key
+    while i < len(black_keys):
+        group = black_keys[i:min(i+2, len(black_keys))]
+        groups.append(group)
+        i += 2
+        if i >= len(black_keys):
+            break
+
+        group = black_keys[i:min(i+3, len(black_keys))]
+        groups.append(group)
+        i += 3
+
+    middle_2_group = 0
+    i = middle_2_key
+    while i > 0:
+        group = black_keys[max(i-3, 0):i]
+        groups.insert(0, group)
+        middle_2_group += 1
+        i -= 3
+        if i <= 0: break
+
+        group = black_keys[max(i-2, 0):i]
+        groups.insert(0, group)
+        middle_2_group += 1
+        i -= 2
+
+    return groups, middle_2_group
+
+def get_black_keys(black_key_groups, middle_2_group):
     labeled_black_keys = []
     note_names_2 = ["C#", "D#"]
     note_names_3 = ["F#", "G#", "A#"]
@@ -208,7 +223,9 @@ def key_edges(image, white_key_mask, left, right, black_y):
                 labeled_black_keys.append((key[0], key[1], note_names_3[j]))
 
     labeled_black_keys.sort()
+    return labeled_black_keys
 
+def get_white_keys(labeled_black_keys, left, right, avg_width):
     white_lines = [left]
     labeled_white_keys = []
 
@@ -244,25 +261,33 @@ def key_edges(image, white_key_mask, left, right, black_y):
             else:
                 labeled_white_keys.append((white_lines[-2], white_lines[-1], "E"))
 
-
+    key_order = ["C", "D", "E", "F", "G", "A", "B"]
     next_white_key = key_order[(key_order.index(labeled_white_keys[-1][2])+1)%7]
     labeled_white_keys.append((white_lines[-1], right, next_white_key))
 
-    # for key in labeled_black_keys:
-    #     cv2.line(image, (key[0], black_y-3), (key[0], black_y+3), (0, 255, 0), 1)
-    #     cv2.line(image, (key[1], black_y-3), (key[1], black_y+3), (0, 255, 0), 1)
-    # cv2.imshow('keys', cv2.resize(image, (0, 0), fx=2, fy=2))
-    # cv2.waitKey(0)
+    return labeled_white_keys
 
-    labeled_keys = labeled_black_keys + labeled_white_keys
-    labeled_keys.sort()
+def get_key_lines(white_key_mask, left, right, black_y):
+    lines = get_black_key_lines(white_key_mask, black_y, left, right)
+
+    black_keys = []
+    for i in range(len(lines)-1):
+        if lines[i][1]:
+            black_keys.append((lines[i][0], lines[i+1][0]))
+    avg_width = np.mean([black_keys[i+1][0] - black_keys[i][1] for i in range(len(black_keys)-1)])
+
+    b_key_groups, middle_2_group = get_black_key_groups(black_keys, avg_width)
+
+    labeled_b_keys = get_black_keys(b_key_groups, middle_2_group)
+    labeled_w_keys = get_white_keys(labeled_b_keys, left, right, avg_width)
+    labeled_keys = sorted(labeled_b_keys + labeled_w_keys)
 
     return labeled_keys
 
 def get_middle_c(labeled_keys, left, right):
     best_c_index = None
     best_c_dist = None
-    middle = (left+right)//2
+    middle = (left+right)//MIDDLE_C_LOC # middle C is a bit to the left of the middle
     for i in range(len(labeled_keys)):
         if labeled_keys[i][2] == "C":
             dist = abs(labeled_keys[i][0] - middle)
@@ -271,17 +296,23 @@ def get_middle_c(labeled_keys, left, right):
                 best_c_index = i
     return best_c_index
 
-def make_bounding_boxes(labeled_keys, top, bottom, black_bottom):
+def make_bounding_boxes(labeled_keys, top, bottom, black_bottom, img_shape):
     boxes = []
     for i in range(len(labeled_keys)):
         if "#" in labeled_keys[i][2]:
-            boxes.append((labeled_keys[i][0], top, labeled_keys[i][1], black_bottom))
+            boxes.append((  round(labeled_keys[i][0]/img_shape[1], 5),
+                            round(top/img_shape[0], 5), 
+                            round(labeled_keys[i][1]/img_shape[1], 5), 
+                            round(black_bottom/img_shape[0], 5) ))
         else:
-            boxes.append((labeled_keys[i][0], top, labeled_keys[i][1], bottom))
+            boxes.append((  round(labeled_keys[i][0]/img_shape[1], 5),
+                            round(top/img_shape[0], 5), 
+                            round(labeled_keys[i][1]/img_shape[1], 5), 
+                            round(bottom/img_shape[0], 5) ))
 
     return boxes
 
-def key_masks(white_key_mask, midi_boxes):
+def get_key_masks(white_key_mask, midi_boxes):
     masks = []
     black_mask = 1 - white_key_mask
     for box, midi, note in midi_boxes:
@@ -295,28 +326,6 @@ def key_masks(white_key_mask, midi_boxes):
             masks.append(mask)
     return masks
 
-def show_masks(image, masks):
-    import random
-
-    for mask in masks:
-        random_color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
-        image[mask] = random_color
-
-    cv2.imshow('img', cv2.resize(image, (0, 0), fx=2, fy=2))
-    cv2.waitKey(0)
-
-def show_boxes(image, midi_boxes):
-    for box, midi, note in midi_boxes:
-        if not "#" in note:
-            cv2.rectangle(image, (box[0], box[1]), (box[2], box[3]), (0, 0, 255), 1)
-
-    for box, midi, note in midi_boxes:
-        if "#" in note:
-            cv2.rectangle(image, (box[0], box[1]), (box[2], box[3]), (0, 255, 0), 1)
-
-    cv2.imshow('img', cv2.resize(image, (0, 0), fx=2, fy=2))
-    cv2.waitKey(0)
-
 
 if __name__ == "__main__":
     import key_matcher
@@ -325,18 +334,20 @@ if __name__ == "__main__":
     #background_path = "data/1_intermediate/background/scarlatti.png"
     background_dir = "data/1_intermediate/background/"
     for filename in os.listdir(background_dir):
-        # filename= "2nlvRLfHuzg.png"
+        # filename= "tdGW5R7xDxg.png"
+        # VISUALIZE=True
         background_path = os.path.join(background_dir, filename)
         print(background_path)
         image = cv2.imread(background_path)
         #mask = white_key_mask(image)
         # cv2.imshow('mask', cv2.resize(mask*255, (0, 0), fx=2, fy=2))
         # cv2.waitKey(0)
-        matcher = key_matcher.KeyMatcher()
-        try:
-            midi_boxes, masks = segment_keys(image, matcher)
-        except Exception as e:
-            cv2.imshow('img', cv2.resize(image, (0, 0), fx=2, fy=2))
-            cv2.waitKey(0)
-            continue
-        show_boxes(image, midi_boxes)
+        # try:
+        matcher = key_matcher.YoloMatcher()
+        midi_boxes, masks = segment_keys(image, matcher)
+        # image = draw_boxes(image, midi_boxes)
+        # except Exception as e:
+        #     print(background_path, e)
+        #     throw e
+
+        cv2.imwrite("data/visual/segments/"+filename, image)

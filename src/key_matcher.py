@@ -75,7 +75,14 @@ class KeyMatcher:
         _, _, _, max_loc = cv2.minMaxLoc(res)
         top = max(0, int(max_loc[1] - ckeys.shape[0]*0.85)) # keyboard top and bottom
         bottom = min(img.shape[0],  int(max_loc[1] + ckeys.shape[0]*1.3))
-        
+
+        # show top and bottom
+        # image = img.copy()
+        # image = cv2.rectangle(image, (0, top), (img.shape[1], bottom), (0, 0, 255), 1)
+        # image = cv2.rectangle(image, max_loc, (max_loc[0] + ckeys.shape[1], max_loc[1] + ckeys.shape[0]), (0, 255, 0), 1)
+        # cv2.imshow('img', image)
+        # cv2.waitKey(0)
+
         return res, (top, bottom)
 
     def GetClusters(self, matches):  
@@ -142,12 +149,37 @@ class FeatureKeyMatcher:
         cv2.waitKey(0) 
         print(len(matches))
         return len(matches) > 5
-    
+
+class YoloMatcher:
+    def __init__(self) -> None:
+        from ultralytics import YOLO
+        self.model = YOLO("models/yolo_detection.pt")
+
+    def ContainsKeyboard(self, img):
+        # reshape to max 640x640
+        if img.shape[0] > 640 or img.shape[1] > 640:
+            scale_factor = 640 / max(img.shape[0], img.shape[1])
+            img = cv2.resize(img, (0, 0), fx=scale_factor, fy=scale_factor)
+        result = self.model.predict(img, verbose=False, imgsz=640, conf=0.5)[0].boxes
+        if len(result.conf) > 0:
+            return list(map(int, result.xyxy[0].tolist()))
+        else:
+            return None
 
 if __name__ == "__main__":
-    matcher = FeatureKeyMatcher()
-    dir_path = 'data/1_intermediate/keyboard_detector/separated/without_keyboard'
+    matcher = YoloMatcher()
+    dir_path = 'data/1_intermediate/keyboard_detector/separated/with_keyboard/'
     files = os.listdir(dir_path)
+    count = 0
+    correct_count = 0
     for file in files:
         img = cv2.imread(f'{dir_path}/{file}')
-        matcher.ContainsKeyboard(img)
+        c = matcher.ContainsKeyboard(img)
+        count += 1
+        if c: correct_count += 1
+        else:
+            cv2.imshow('img', img)
+            cv2.waitKey(0)
+            pass
+        print(f'{correct_count}/{count}')
+            

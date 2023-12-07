@@ -8,6 +8,7 @@ from intervaltree import IntervalTree
 import os
 import json
 import logging
+from draw import draw_landmarks_on_image
 
 class PianoVideo():
     def __init__(self, path, cache_path="data/1_intermediate") -> None:
@@ -30,6 +31,7 @@ class PianoVideo():
         self._detector = None
         self._audio_path = None
         self._transcribed_midi = None
+        self._keys = None
 
         if True:
             if os.path.exists(f"{self.cache_path}/sections/{self.file_name}.json"):
@@ -53,11 +55,15 @@ class PianoVideo():
             if os.path.exists(f"{self.cache_path}/background/{self.file_name}.png"):
                 self._background = cv2.imread(f"{self.cache_path}/background/{self.file_name}.png")
 
+            if os.path.exists(f"{self.cache_path}/keys/{self.file_name}.json"):
+                with open(f"{self.cache_path}/keys/{self.file_name}.json", 'r') as f:
+                    self._keys = json.load(f)
+
     @property
     def detector(self):
         if self._detector is None:
-            from key_matcher import FeatureKeyMatcher, KeyMatcher
-            self._detector = KeyMatcher()
+            from key_matcher import FeatureKeyMatcher, KeyMatcher, YoloMatcher
+            self._detector = YoloMatcher()
         return self._detector
 
     # audio path, if doesn't exist use ffmpeg to extract audio
@@ -191,8 +197,8 @@ class PianoVideo():
     @property
     def background(self):
         '''Gets the frame of the piano using mediapipe hand landmarks'''
-        # if self._background is not None:
-        #     return self._background
+        if self._background is not None:
+            return self._background
 
         size = sum([i.end-i.begin for i in self.sections])
 
@@ -250,18 +256,59 @@ class PianoVideo():
         return self._background
 
     @property
-    def key_segments(self): # TODO: caching
+    def keys(self):
+        if self._keys is not None:
+            return self._keys
+        
         import keyboard_segmentation
-        return keyboard_segmentation.segment_keys(self.background, self.detector)
+        keys = keyboard_segmentation.segment_keys(self.background, self.detector)
+        self._keys = keys
+
+        with open(f"{self.cache_path}/keys/{self.file_name}.json", 'w') as f:
+            json.dump(self._keys, f)
+    
+    @property
+    def fingers(self):
+        from fingers import closest_finger
+
+        keys = self.keys
+
+        # iterate over onsents, get hand landmarks at that time
+        sorted_notes = list(sorted(self.transcribed_midi))
+        landmarks = self.hand_landmarks()
+        note = sorted_notes.pop(0) if sorted_notes else None
+
+        finger_notes = IntervalTree()
+
+        for i, hands in enumerate(landmarks):
+            while note and note.begin == i:
+                box = next((key for key in keys if key[1] == note.data[0]), None)
+                if box is not None:
+                    finger_notes[note.begin:note.end] = note.data + [closest_finger(box, hands)]
+                note = sorted_notes.pop(0) if sorted_notes else None
+        
+        self._fingers = finger_notes
+
+        with open(f"{self.cache_path}/fingers/{self.file_name}.json", 'w') as f:
+            json.dump(list(sorted(self._fingers)), f)
+
+        return self._fingers
+
+    def midi_key_segments(self): # segments labeled with midi note numbers
+        segments = self.key_segments
+        fingers = self.fingers
+
+    
 
 
-#video = PianoVideo("demo/scarlatti.mp4")
+
+video = PianoVideo("demo/scarlatti.mp4")
 # video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\Erik C 'Piano Man'\gBMmUVzvl2U.mp4")
 # video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\Liberty Park Music\3psRRVgGYdc.mp4")
 # video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\Paul Barton\NLPxfEMfnVM.mp4")
-video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\Jane\2cz5qP36g_Y.webm") 
-video.background
-# pass
+# video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\Jane\2cz5qP36g_Y.webm") 
+video.fingers
+pass
 # sections = video.sections
 # midi_boxes, masks = video.key_segments
 # print(time.time()-t0)
