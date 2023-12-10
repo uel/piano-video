@@ -71,19 +71,25 @@ def show_masks(image, masks):
     cv2.waitKey(0)
 
 def draw_boxes(image, midi_boxes, show=False):
-    avg_white_width = np.mean([box[2]-box[0] for box, _, note in midi_boxes if not "#" in note])
+    avg_white_width = np.mean([box[2]-box[0] for note, _, box in midi_boxes if not "#" in note])
 
-    for box, midi, note in midi_boxes:
+    for note, midi, box in midi_boxes: # white keys
         if not "#" in note:
-            cv2.rectangle(image, (box[0], box[1]), (box[2], box[3]), (0, 0, 255), 1)
+            cv2.rectangle(image,(   int(box[0]*image.shape[1]),
+                                    int(box[1]*image.shape[0])), 
+                                (   int(box[2]*image.shape[1]), 
+                                    int(box[3]*image.shape[0])), (0, 0, 255), 1)
             
             fontsize = (avg_white_width/14.)*0.25
             offset = int((avg_white_width/14.)*2.5)
-            cv2.putText(image, str(midi), (box[0]+offset, box[3]-offset), cv2.FONT_HERSHEY_SIMPLEX, fontsize, (0, 0, 255), 1)
+            cv2.putText(image, str(midi), (int(box[0]*image.shape[1])+offset, int(box[3]*image.shape[0])-offset), cv2.FONT_HERSHEY_SIMPLEX, fontsize, (0, 0, 255), 1)
 
-    for box, midi, note in midi_boxes:
+    for note, midi, box in midi_boxes: # black keys
         if "#" in note:
-            cv2.rectangle(image, (box[0], box[1]), (box[2], box[3]), (0, 255, 0), 1)
+            cv2.rectangle(image,(   int(box[0]*image.shape[1]),
+                                    int(box[1]*image.shape[0])), 
+                                (   int(box[2]*image.shape[1]), 
+                                    int(box[3]*image.shape[0])), (0, 0, 128), 1)
 
     if show:
         cv2.imshow('img', cv2.resize(image, (0, 0), fx=2, fy=2))

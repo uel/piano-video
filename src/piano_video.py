@@ -57,7 +57,7 @@ class PianoVideo():
 
             if os.path.exists(f"{self.cache_path}/keys/{self.file_name}.json"):
                 with open(f"{self.cache_path}/keys/{self.file_name}.json", 'r') as f:
-                    self._keys = json.load(f)
+                    self._keyboard_box, self._white_key_lightness_thresh, self._keys = json.load(f)
 
     @property
     def detector(self):
@@ -120,7 +120,7 @@ class PianoVideo():
             for note in result:
                 onset = int(note["onset_time"]*self.fps)
                 offset = int(note["offset_time"]*self.fps)
-                if onset == offset: continue # prevent null intervals in interval tree
+                if onset == offset: continue # prevent null intervals in interval tree, TODO: minimal interval length?
                 self._transcribed_midi.append([onset, offset, [note["midi_note"], note["velocity"]]])
 
             with open(f"{self.cache_path}/transcribed_midi/{self.file_name}.json", 'w') as f:
@@ -258,57 +258,54 @@ class PianoVideo():
     @property
     def keys(self):
         if self._keys is not None:
-            return self._keys
+            return [self._keyboard_box, self._white_key_lightness_thresh, self._keys]
         
         import keyboard_segmentation
-        keys = keyboard_segmentation.segment_keys(self.background, self.detector)
+        keyboard_box, white_key_lightness_thresh, keys = keyboard_segmentation.segment_keys(self.background, self.detector)
+        self._keyboard_box = keyboard_box
+        self._white_key_lightness_thresh = white_key_lightness_thresh
         self._keys = keys
 
         with open(f"{self.cache_path}/keys/{self.file_name}.json", 'w') as f:
-            json.dump(self._keys, f)
+            json.dump([self._keyboard_box, self._white_key_lightness_thresh, self._keys], f)
     
     @property
     def fingers(self):
-        from fingers import closest_finger
+        from fingers import finger_notes, remove_outliers
 
-        keys = self.keys
+        _, _, keys = self.keys
 
         # iterate over onsents, get hand landmarks at that time
-        sorted_notes = list(sorted(self.transcribed_midi))
-        landmarks = self.hand_landmarks()
-        note = sorted_notes.pop(0) if sorted_notes else None
+        min_dist = np.inf
+        best_shift = 0
+        best_notes = None
+        for i in  [0, -1, 1]:
+            notes, dist = finger_notes(self.transcribed_midi, self.hand_landmarks(), keys, midi_id_offset=i)
+            if dist < min_dist:
+                min_dist = dist
+                best_shift = i
+                best_notes = notes
 
-        finger_notes = IntervalTree()
+        if best_shift != 0: logging.info(f"Shifted midi by {best_shift} octaves")
 
-        for i, hands in enumerate(landmarks):
-            while note and note.begin == i:
-                box = next((key for key in keys if key[1] == note.data[0]), None)
-                if box is not None:
-                    finger_notes[note.begin:note.end] = note.data + [closest_finger(box, hands)]
-                note = sorted_notes.pop(0) if sorted_notes else None
-        
-        self._fingers = finger_notes
+        self._fingers = remove_outliers(best_notes, keys)
 
         with open(f"{self.cache_path}/fingers/{self.file_name}.json", 'w') as f:
             json.dump(list(sorted(self._fingers)), f)
 
         return self._fingers
 
-    def midi_key_segments(self): # segments labeled with midi note numbers
-        segments = self.key_segments
-        fingers = self.fingers
 
-    
-
-
-
-video = PianoVideo("demo/scarlatti.mp4")
+logging.basicConfig(level=logging.DEBUG)
+# video = PianoVideo("demo/scarlatti.mp4")
 # video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\Erik C 'Piano Man'\gBMmUVzvl2U.mp4")
 # video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\Liberty Park Music\3psRRVgGYdc.mp4")
 # video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\Paul Barton\NLPxfEMfnVM.mp4")
-# video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\Jane\2cz5qP36g_Y.webm") 
-video.fingers
-pass
+# video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\Jane\2cz5qP36g_Y.webm")
+
+# video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\Jane\YgO-UJDfCZE.webm")
+# video.fingers
+# pass
 # sections = video.sections
 # midi_boxes, masks = video.key_segments
 # print(time.time()-t0)

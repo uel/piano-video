@@ -47,7 +47,7 @@ def segment_keys(image, key_matcher):
     for i, b in enumerate(boxes):
         midi_boxes.append((labeled_keys[i][2], 60 + i - c_idx, b))
         
-    return midi_boxes
+    return (left, top, right, bottom), black_lightness, midi_boxes
 
 def mean_lightness(image, y):
     # average brightness of white keys
@@ -315,7 +315,8 @@ def make_bounding_boxes(labeled_keys, top, bottom, black_bottom, img_shape):
 def get_key_masks(white_key_mask, midi_boxes):
     masks = []
     black_mask = 1 - white_key_mask
-    for box, midi, note in midi_boxes:
+    for note, midi, box in midi_boxes:
+        box = (int(box[0]*white_key_mask.shape[1]), int(box[1]*white_key_mask.shape[0]), int(box[2]*white_key_mask.shape[1]), int(box[3]*white_key_mask.shape[0]))
         if "#" in note:
             mask = np.zeros(white_key_mask.shape[:2], dtype=bool)
             mask[box[1]:box[3], box[0]:box[2]] = black_mask[box[1]:box[3], box[0]:box[2]]

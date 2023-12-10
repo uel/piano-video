@@ -1,6 +1,9 @@
-*.pyc
-.*
+__pycache__/
+*.py[cod]
+*$py.class
 *.exe
-data/*
+.*
+data/**
 models/*
 report/*
+notes.md
