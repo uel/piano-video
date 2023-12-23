@@ -6,8 +6,6 @@ VISUALIZE = False
 WHITE_KEY_B_THRESH = 0.7 # lightness multiplier for mean lightness of B/W key area
 WHITE_KEY_W_THRESH = 0.6 # lightness multiplier for mean lightness of W key area
 HALF_STRIP_HEIGHT = 5 # half the height of the strip used to find edges
-TOP_THRESH = 0.3 
-SIDES_THRESH = 0.5
 BLACK_KEY_BOTTOM_THRESH = 0.85
 BLACK_KEY_EDGE_THRESH = 0.5
 BLACK_KEY_BIG_GAP = 1.1 # gaps between black keys bigger that BLACK_KEY_BIG_GAP * mean_width are considered big gaps
@@ -25,9 +23,6 @@ def segment_keys(image, key_matcher):
     white_keys_b = white_key_mask(image, black_lightness)
     white_keys_w = white_key_mask(image, white_lightness)
 
-    # left, right = keyboard_sides(white_keys_w, y_white)
-
-    # top, bottom = get_top_bottom(white_keys_b, left, right, y_white)
     black_bottom = get_black_key_bottom(white_keys_b, left, right, y_black)
 
     if VISUALIZE:
@@ -60,54 +55,6 @@ def white_key_mask(image, mean_lightness):
     hls = cv2.cvtColor(image, cv2.COLOR_BGR2HLS)
     mask = cv2.inRange(hls, (0, mean_lightness, 0), (255, 255, 255))//255
     return mask
-
-def keyboard_sides(white_keys, white_y):
-    # pixels around the keys
-    white_keys = white_keys[white_y-HALF_STRIP_HEIGHT:white_y+HALF_STRIP_HEIGHT, :]
-
-    if VISUALIZE:
-        img = white_keys.copy()*255
-        cv2.imshow('img', cv2.resize(img, (0, 0), fx=2, fy=2))
-        cv2.waitKey(0)
-
-    white_keys = np.sum(white_keys, axis=0)
-    white_keys = np.convolve(white_keys, np.ones(HALF_STRIP_HEIGHT), mode='same')
-    white_keys = white_keys <= 2*HALF_STRIP_HEIGHT*HALF_STRIP_HEIGHT*SIDES_THRESH
-
-    if VISUALIZE:
-        img = white_keys.copy()*255
-        img = np.array([img]*2*HALF_STRIP_HEIGHT, dtype=np.uint8)
-        cv2.imshow('img', img)
-        cv2.waitKey(0)
-
-    left = 0
-    right = white_keys.shape[0]-1
-    for i in range(white_keys.shape[0]):
-        if i < white_keys.shape[0]//2 and white_keys[i] and i > left:
-            left = i
-        elif i >= white_keys.shape[0]//2 and white_keys[i]:
-            right = i
-            break
-
-    return left, right
-
-def get_top_bottom(white_key_mask, left, right, white_y):
-    white_key_mask = white_key_mask[:, left:right]
-    whites = np.sum(white_key_mask, axis=1)
-
-    top = white_y
-    for i in range(white_y, -1, -1):
-        if whites[i] < (right-left)*TOP_THRESH:
-            top = i
-            break
-
-    bottom = white_y
-    for i in range(white_y, white_key_mask.shape[0]):
-        if whites[i] < (right-left)*SIDES_THRESH:
-            bottom = i
-            break
-
-    return top, bottom
 
 def get_black_key_bottom(white_key_mask, left, right, black_y):
     white_key_mask = white_key_mask[:, left:right]

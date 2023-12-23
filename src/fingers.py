@@ -17,7 +17,8 @@ def closest_point_to_rect(rect, query):
 
 def closest_finger(key, hands):
     finger_tips = []
-    for hand, fingers in zip(["L", "R"], hands): # TOOD: hands doesn contain info about handendness
+    for hand, fingers in zip(["L", "R"], hands):
+        if fingers is None: continue
         for f_id, finger in enumerate(np.array(fingers)[[4, 8, 12, 16, 20]], 1): # indicies of finger tips
             finger_tips.append((hand+str(f_id), (finger[0], finger[1])))
 

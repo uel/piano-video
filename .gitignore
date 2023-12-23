@@ -6,4 +6,6 @@ __pycache__/
 data/**
 models/*
 report/*
+demo/*
+recording/*
 notes.md

@@ -27,8 +27,8 @@ def KeyboardFrames(input_folder, output_folder):
             print("sections ", time.time()-t)
             video.hand_landmarks
             print("landmarks ", time.time()-t)
-            video.transcribed_midi
-            print("midi ", time.time()-t)
+            # video.transcribed_midi
+            # print("midi ", time.time()-t)
 
 KeyboardFrames('data/0_raw/all_videos/Jane', 'data/1_intermediate/background')
 KeyboardFrames('data/0_raw/all_videos/flowkey – Learn piano', 'data/1_intermediate/background')
