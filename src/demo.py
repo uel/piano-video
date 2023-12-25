@@ -33,6 +33,7 @@ def play_demo(video_path, show=True, save=False, skip_non_piano=False, truth_mid
         ret, frame = cap.read()
         if ret == True:
             hands = next(landmarks) 
+            print(hands)
 
             if skip_non_piano and not sections[i]:
                 i += 1
@@ -89,9 +90,9 @@ if __name__ == "__main__":
     video_path = "data/0_raw/all_videos/Paul Barton/s2_9g-dAnT0.mp4"
     video_path = "data/0_raw/all_videos/Jane/YgO-UJDfCZE.webm"
     video_path = "demo/scarlatti.mp4"
-    video_path = r"C:\Users\danif\s\BP\data\0_raw\all_videos\Paul Barton\NLPxfEMfnVM.mp4"
     video_path = "recording/rec3.mp4"
     video_path = "demo/sections_test.mp4"
+    video_path = r"C:\Users\danif\s\BP\data\0_raw\all_videos\Paul Barton\NLPxfEMfnVM.mp4"
     video_path = "data/0_raw/all_videos/Paul Barton/nc29R1xYmjQ.mp4"
     video_path = "data/0_raw/all_videos/Erik C 'Piano Man'/8xJdM4S-fko.mp4"
     play_demo(video_path, skip_non_piano=True)

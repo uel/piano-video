@@ -23,10 +23,11 @@ def KeyboardFrames(input_folder, output_folder):
         print(filename)
         video = PianoVideo(filename)
         t = time.time()
-        if video.background is not None:
-            print("sections ", time.time()-t)
-            video.hand_landmarks
-            print("landmarks ", time.time()-t)
+        video.hand_landmarks
+        # if video.background is not None:
+        #     print("sections ", time.time()-t)
+        #     video.hand_landmarks
+        #     print("landmarks ", time.time()-t)
             # video.transcribed_midi
             # print("midi ", time.time()-t)
 

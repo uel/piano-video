@@ -56,10 +56,11 @@ class PianoVideo():
 
     @cached_property
     def hand_landmarks(self):
-        if os.path.exists(f"{self.cache_path}/hand_landmarks/{self.file_name}.bin"):
-            return file_io.read_landmarks(f"{self.cache_path}/hand_landmarks/{self.file_name}.bin")
-        
         import hands
+        if os.path.exists(f"{self.cache_path}/hand_landmarks/{self.file_name}.bin"):
+            landmarks = file_io.read_landmarks(f"{self.cache_path}/hand_landmarks/{self.file_name}.bin")
+            return hands.fill_gaps(landmarks)
+        
         _hand_landmarks = []
         with hands.landmarker() as landmarker:
             for i, frame in self.get_video(): # frame must be in mp format
@@ -78,7 +79,7 @@ class PianoVideo():
                     _hand_landmarks.append([i, left_hand, right_hand])
         file_io.write_landmarks(f"{self.cache_path}/hand_landmarks/{self.file_name}.bin", _hand_landmarks)
         
-        return _hand_landmarks
+        return hands.fill_gaps(_hand_landmarks)
     
     @property
     def hand_landmarker(self):
