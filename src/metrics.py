@@ -51,7 +51,7 @@ if __name__ == "__main__":
     # file2 = "data/1_intermediate/transcribed_midi/scarlatti.json"
 
     file1 = "recording/rec3_fingers_truth.json"
-    file2 = "recording/rec3_estimate.json"
+    file2 = "recording/rec3_estimate2.json"
     file3 = "recording/rec3_fingers_estimate.json"
 
     with open(file1, "r") as f:
@@ -59,7 +59,7 @@ if __name__ == "__main__":
         data1 = ShiftIntervals(data1, 2)
     with open(file2, "r") as f:
         data2 = IntervalTree().from_tuples(json.load(f))
-    with open(file3, "r") as f:
+    with open(file2, "r") as f:
         data3 = IntervalTree().from_tuples(json.load(f))
         data3 = RemoveFingerless(data3)
 

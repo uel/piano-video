@@ -29,12 +29,12 @@ def read_landmarks(filename):
             frame_id, left, right = unpacked_data[0], unpacked_data[1:64], unpacked_data[64:]
             
             if math.isnan(left[0]): left = None
-            else: left = np.array(left).reshape(-1, 3).tolist()
+            else: left = tuple(np.array(left).reshape(-1, 3))
 
             if math.isnan(right[0]): right = None
-            else: right = np.array(right).reshape(-1, 3).tolist()
+            else: right = tuple(np.array(right).reshape(-1, 3))
             
-            result.append([frame_id, left, right])
+            result.append((frame_id, left, right))
     
     return result
   

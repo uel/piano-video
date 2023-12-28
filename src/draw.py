@@ -10,11 +10,13 @@ FONT_THICKNESS = 1
 HANDEDNESS_TEXT_COLOR = (88, 205, 54) # vibrant green
 
 def draw_landmarks_on_image(rgb_image, detection_result):
-    if isinstance(detection_result, list):
+    if isinstance(detection_result, tuple):
         hand_landmarks_list = []
         for hand in detection_result:
             if hand is not None:
                 hand_landmarks_list.append([landmark_pb2.NormalizedLandmark(x=landmark[0], y=landmark[1], z=landmark[2]) for landmark in hand])
+            else:
+                hand_landmarks_list.append([])
     else:
         hand_landmarks_list = detection_result.hand_landmarks
 
@@ -23,6 +25,7 @@ def draw_landmarks_on_image(rgb_image, detection_result):
   # Loop through the detected hands to visualize.
     for idx in range(len(hand_landmarks_list)):
         hand_landmarks = hand_landmarks_list[idx]
+        if not hand_landmarks: continue
 
         # Draw the hand landmarks.
         hand_landmarks_proto = landmark_pb2.NormalizedLandmarkList()
@@ -55,9 +58,15 @@ def draw_landmarks_on_image(rgb_image, detection_result):
         text_y = int(min(y_coordinates) * height) - MARGIN
 
         # Draw handedness (left or right hand) on the image.
-        # cv2.putText(annotated_image, f"{handedness[0].category_name}",
-        #             (text_x, text_y), cv2.FONT_HERSHEY_DUPLEX,
-        #             FONT_SIZE, HANDEDNESS_TEXT_COLOR, FONT_THICKNESS, cv2.LINE_AA)
+        if isinstance(detection_result, tuple):
+            handedness = 'Left' if idx == 0 else 'Right'
+        else:
+            handedness = 'Left' if detection_result.handedness[idx][0].category_name =='Right' else 'Right'
+        
+        cv2.putText(annotated_image, f"{handedness}",
+                    (text_x, text_y), cv2.FONT_HERSHEY_DUPLEX,
+                    FONT_SIZE, HANDEDNESS_TEXT_COLOR, FONT_THICKNESS, cv2.LINE_AA)
+    
 
     return annotated_image
 

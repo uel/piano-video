@@ -60,25 +60,16 @@ class PianoVideo():
         if os.path.exists(f"{self.cache_path}/hand_landmarks/{self.file_name}.bin"):
             landmarks = file_io.read_landmarks(f"{self.cache_path}/hand_landmarks/{self.file_name}.bin")
             return hands.fill_gaps(landmarks)
+            # return landmarks
         
         _hand_landmarks = []
         with hands.landmarker() as landmarker:
             for i, frame in self.get_video(): # frame must be in mp format
-                results = landmarker.detect(landmarker, frame, (1000*i)//self.fps)
-                if results.hand_landmarks:
-                    left_hand = []
-                    right_hand = []
-                    for j, hand in enumerate(results.hand_landmarks):
-                        if results.handedness[j][0].category_name == "Left": # swap hands, frame not flipped
-                            right_hand = [ [round(landmark.x, 4), round(landmark.y, 4), round(landmark.z, 4)] for landmark in hand ]
-                        else:
-                            left_hand = [ [round(landmark.x, 4), round(landmark.y, 4), round(landmark.z, 4)] for landmark in hand ]
-                    left_hand = left_hand if left_hand else None
-                    right_hand = right_hand if right_hand else None
-
-                    _hand_landmarks.append([i, left_hand, right_hand])
+                left_hand, right_hand = landmarker.detect(landmarker, frame, (1000*i)//self.fps)
+                _hand_landmarks.append((i, left_hand, right_hand))
         file_io.write_landmarks(f"{self.cache_path}/hand_landmarks/{self.file_name}.bin", _hand_landmarks)
         
+        # return _hand_landmarks
         return hands.fill_gaps(_hand_landmarks)
     
     @property
