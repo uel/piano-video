@@ -187,12 +187,6 @@ class PianoVideo():
         if os.path.exists(f"{self.cache_path}/background/{self.file_name}.png"):
             return cv2.imread(f"{self.cache_path}/background/{self.file_name}.png")
 
-        size = sum([i.end-i.begin for i in self.sections])
-
-        if size < 15*self.fps: # at least 15 seconds of video must be piano
-            logging.warning(f"Background not extracted, {self.file_name} has less than 15 seconds of keyboard frames")
-            return None
-
         frames = []
         non_nan_counts = np.zeros((self.width,)) # make sure there are no NaNs in result
         frame_count = 0
@@ -232,16 +226,22 @@ class PianoVideo():
                     frames.append(frame)
                 non_nan_counts += not_nan
 
+        if len(frames) == 0:
+            raise Exception("No frames with hands found")
+
         _background = np.nanmedian(frames, axis=(0)).astype(np.uint8)
+
         if np.isnan(_background).any():
             logging.warning(f"NaN values in {self.file_name} background")
-
-        # cv2.imshow('img', self._background)
-        # cv2.waitKey(0)
 
         cv2.imwrite(f"{self.cache_path}/background/{self.file_name}.png", _background)
 
         return _background
+    
+    def keyboard_frame_count(self):
+        '''Returns the number of frames where the keyboard is detected'''
+        return sum([i.end-i.begin for i in self.sections])
+
 
     @cached_property
     def keys(self):
@@ -297,11 +297,11 @@ if __name__ == "__main__":
     # video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\Paul Barton\NLPxfEMfnVM.mp4")
     # video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\Jane\2cz5qP36g_Y.webm")
 
-    # video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\Jane\YgO-UJDfCZE.webm")
+    video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\Jane\AAO2Arka8gA.webm")
     # video.hand_landmarks
     # video = PianoVideo(r"C:\Users\danif\s\BP\recording\rec3.mp4")
-    video = PianoVideo(r"C:\Users\danif\s\BP\demo\sections_test.mp4")
-    video.sections
+    # video = PianoVideo(r"C:\Users\danif\s\BP\demo\sections_test.mp4")
+    video.background
     # pass
     # sections = video.sections
     # midi_boxes, masks = video.key_segments
