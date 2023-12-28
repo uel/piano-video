@@ -12,7 +12,7 @@ import file_io
 from functools import cached_property
 
 class PianoVideo():
-    def __init__(self, path, cache_path="data/1_intermediate") -> None:
+    def __init__(self, path, cache_path="data/1_intermediate", max_shape=640) -> None:
         self.path = path
         self.cache_path = cache_path
         self.file_name = os.path.basename(path).split('.')[0]
@@ -25,11 +25,12 @@ class PianoVideo():
         self.width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self.frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        self.max_shape = max_shape
 
     @cached_property
     def detector(self):
         from key_matcher import FeatureKeyMatcher, KeyMatcher, YoloMatcher
-        return YoloMatcher() # maybe unecessary
+        return YoloMatcher()
 
     @cached_property
     def audio_path(self):
@@ -41,7 +42,6 @@ class PianoVideo():
         
         return f"{self.cache_path}/audio/{self.file_name}.mp3"
 
-    # sections, if doesn't exist use self.find_intervals(self.detector.ContainsKeyboard) and save to json
     @cached_property
     def sections(self):
         if os.path.exists(f"{self.cache_path}/sections/{self.file_name}.json"):
@@ -82,7 +82,7 @@ class PianoVideo():
                     yield self.hand_landmarks[current][1:]
                     current += 1
                 else:
-                    yield []
+                    yield ()
 
         return landmarks_generator()
 
@@ -173,6 +173,14 @@ class PianoVideo():
 
         return new_intervals
 
+    def resize_frame(self, frame):
+        '''Resizes frame to fit in a square with size max_shape while keeping aspect ratio'''
+        if max(frame.shape) > self.max_shape:
+            scale = self.max_shape / max(frame.shape)
+            return cv2.resize(frame, (0, 0), fx=scale, fy=scale)
+        else:
+            return frame
+
     @cached_property
     def background(self):
         '''Gets the frame of the piano using mediapipe hand landmarks'''
@@ -213,7 +221,7 @@ class PianoVideo():
                 frame[:,left:right,:] = np.NAN
                 not_nan[left:right] = 0
 
-            frame = cv2.resize(frame, (640, int(640 / frame.shape[1] * frame.shape[0]))) # TODO: standard for scaling
+            frame = self.resize_frame(frame)
 
             if np.any(not_nan & ( non_nan_counts <= (min(non_nan_counts)+5) )):
                 frame_count += 1
