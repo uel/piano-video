@@ -31,6 +31,9 @@ def closest_finger(key, hands):
             closest_dist = dist
             closest_finger = finger
     
+    if closest_dist == math.inf: # finger doesn't exist at this point
+        closest_dist = 0
+
     return closest_finger, closest_dist
 
 def finger_notes(notes, landmarks, keys, midi_id_offset = 0) -> tuple[int, IntervalTree]:

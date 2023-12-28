@@ -72,12 +72,11 @@ class PianoVideo():
         # return _hand_landmarks
         return hands.fill_gaps(_hand_landmarks)
     
-    @property
     def hand_landmarker(self):
         # generator function that returns empty list if no hand landmarks
         def landmarks_generator():
             current = 0
-            for i in range(0, self.frame_count):
+            for i in range(0, self.frame_count+1):
                 if current < len(self.hand_landmarks) and self.hand_landmarks[current][0] == i:
                     yield self.hand_landmarks[current][1:]
                     current += 1
@@ -190,7 +189,7 @@ class PianoVideo():
         frames = []
         non_nan_counts = np.zeros((self.width,)) # make sure there are no NaNs in result
         frame_count = 0
-        landmarks = self.hand_landmarker
+        landmarks = self.hand_landmarker()
         handc = 0
         for i, frame in self.get_video():
             landmark_result = next(landmarks)
@@ -241,21 +240,40 @@ class PianoVideo():
     def keyboard_frame_count(self):
         '''Returns the number of frames where the keyboard is detected'''
         return sum([i.end-i.begin for i in self.sections])
-
-
+    
+    def approx_keys(self):
+        import keyboard_segmentation
+        keyboard_loc = self.detector.ContainsKeyboard(self.background)
+        keys = keyboard_segmentation.segment_keys(self.background, keyboard_loc)
+        return keyboard_loc, keys
+    
     @cached_property
     def keys(self):
         if os.path.exists(f"{self.cache_path}/keys/{self.file_name}.json"):
             with open(f"{self.cache_path}/keys/{self.file_name}.json", 'r') as f:
                 return json.load(f) 
-        
-        import keyboard_segmentation
-        res = list(keyboard_segmentation.segment_keys(self.background, self.detector))
+            
+        from fingers import finger_notes
+
+        keyboard_loc, keys = self.approx_keys()
+
+        # iterate over onsents, get hand landmarks at that time
+        min_dist = np.inf
+        for i in  [0, -1, 1]:
+            _, dist = finger_notes(self.transcribed_midi, self.hand_landmarker(), keys, midi_id_offset=i)
+            if dist < min_dist:
+                min_dist = dist
+                best_shift = i 
+
+        if best_shift != 0: logging.info(f"Shifted keys by {-best_shift} octaves")
+
+        for key in keys:
+            key[1] += -best_shift*12 # -best_shift because transcribed midi had to be shifted by best_shift
 
         with open(f"{self.cache_path}/keys/{self.file_name}.json", 'w') as f:
-            json.dump(res, f)
+            json.dump([keyboard_loc, keys], f)
 
-        return res
+        return keyboard_loc, keys
     
     @cached_property
     def fingers(self):
@@ -263,24 +281,11 @@ class PianoVideo():
             with open(f"{self.cache_path}/fingers/{self.file_name}.json", 'r') as f:
                 return IntervalTree.from_tuples(json.load(f))
 
+        from fingers import remove_outliers, finger_notes
 
-        from fingers import finger_notes, remove_outliers
+        _, keys = self.keys
 
-        _, _, keys = self.keys
-
-        # iterate over onsents, get hand landmarks at that time
-        min_dist = np.inf
-        best_shift = 0
-        best_notes = None
-        for i in  [0, -1, 1]:
-            notes, dist = finger_notes(self.transcribed_midi, self.hand_landmarker, keys, midi_id_offset=i)
-            if dist < min_dist:
-                min_dist = dist
-                best_shift = i
-                best_notes = notes
-
-        if best_shift != 0: logging.info(f"Shifted midi by {best_shift} octaves")
-
+        best_notes, _ = finger_notes(self.transcribed_midi, self.hand_landmarker, keys)
         self._fingers = remove_outliers(best_notes, keys)
 
         with open(f"{self.cache_path}/fingers/{self.file_name}.json", 'w') as f:
@@ -297,11 +302,11 @@ if __name__ == "__main__":
     # video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\Paul Barton\NLPxfEMfnVM.mp4")
     # video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\Jane\2cz5qP36g_Y.webm")
 
-    video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\Jane\AAO2Arka8gA.webm")
+    video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\Jane\XYFZFlDK2ko.webm")
     # video.hand_landmarks
     # video = PianoVideo(r"C:\Users\danif\s\BP\recording\rec3.mp4")
     # video = PianoVideo(r"C:\Users\danif\s\BP\demo\sections_test.mp4")
-    video.background
+    video.keys
     # pass
     # sections = video.sections
     # midi_boxes, masks = video.key_segments

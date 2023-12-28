@@ -13,14 +13,24 @@ def play_demo(video_path, show=True, save=False, skip_non_piano=False, truth_mid
     video = piano_video.PianoVideo(video_path)
     background = video.background
     sections = video.sections
-    keyboard_box, lightness_thresh, keys = video.keys
+    keyboard_box, keys = video.keys
+    keyboard_box = (int(keyboard_box[0]*background.shape[1]), 
+                    int(keyboard_box[1]*background.shape[0]), 
+                    int(keyboard_box[2]*background.shape[1]), 
+                    int(keyboard_box[3]*background.shape[0]))
     midi = video.fingers
     if truth_midi_path is not None:
         midi = IntervalTree().from_tuples(json.load(open(truth_midi_path, "r")))
-    landmarks = video.hand_landmarker
+    landmarks = video.hand_landmarker()
 
 
-    masks = get_key_masks(white_key_mask(background, lightness_thresh), keys)
+    # masks = get_key_masks(white_key_mask(background, lightness_thresh), keys)
+    masks = []
+    for key in keys:
+        mask = np.zeros(background.shape[:2], dtype=bool)
+        mask[int(key[2][1]*background.shape[0]):int(key[2][3]*background.shape[0]), int(key[2][0]*background.shape[1]):int(key[2][2]*background.shape[1])] = 1
+        masks.append(mask)
+
     mask_dict = {keys[i][1]: masks[i] for i in range(len(keys))}
 
 
@@ -73,9 +83,10 @@ def play_demo(video_path, show=True, save=False, skip_non_piano=False, truth_mid
 
             if show:
                 cv2.imshow('frame', cv2.resize(frame, dsize=(640, 360), fx=1, fy=1))
-                if hands and bool(hands[0] is None) != bool(hands[1] is None):
-                    cv2.waitKey(0)
-                else: cv2.waitKey(1)
+                # if hands and bool(hands[0] is None) != bool(hands[1] is None):
+                #     cv2.waitKey(0)
+                # else: cv2.waitKey(1)
+                cv2.waitKey(1)
             i += 1
         else:
             break
@@ -87,15 +98,15 @@ def play_demo(video_path, show=True, save=False, skip_non_piano=False, truth_mid
 
 if __name__ == "__main__":
     video_path = "data/0_raw/all_videos/Jane/ykxAS-P_zHI.webm"
-    video_path = "data/0_raw/all_videos/flowkey – Learn piano/zWULIrqQPEk.mp4"
     video_path = "data/0_raw/all_videos/Jane/ykxAS-P_zHI.webm"
     video_path = "data/0_raw/all_videos/Paul Barton/s2_9g-dAnT0.mp4"
-    video_path = "data/0_raw/all_videos/Jane/YgO-UJDfCZE.webm"
     video_path = "demo/sections_test.mp4"
     video_path = r"C:\Users\danif\s\BP\data\0_raw\all_videos\Paul Barton\NLPxfEMfnVM.mp4"
     video_path = "demo/scarlatti.mp4"
     video_path = "data/0_raw/all_videos/Erik C 'Piano Man'/8xJdM4S-fko.mp4"
     video_path = "recording/rec3.mp4"
+    video_path = "data/0_raw/all_videos/flowkey – Learn piano/zWULIrqQPEk.mp4"
+    video_path = "data/0_raw/all_videos/Jane/XYFZFlDK2ko.webm"
     video_path = "data/0_raw/all_videos/Paul Barton/nc29R1xYmjQ.mp4"
-    play_demo(video_path, skip_non_piano=True)
+    play_demo(video_path)
     # play_demo(video_path, truth_midi_path="recording/rec3_fingers_truth.json")

@@ -11,8 +11,12 @@ BLACK_KEY_EDGE_THRESH = 0.5
 BLACK_KEY_BIG_GAP = 1.1 # gaps between black keys bigger that BLACK_KEY_BIG_GAP * mean_width are considered big gaps
 MIDDLE_C_LOC = 2.3 # middle C is a bit to the left of the middle
 
-def segment_keys(image, key_matcher):
-    left, top, right, bottom = key_matcher.ContainsKeyboard(image)
+def segment_keys(image, keyboard_loc):
+    left, top, right, bottom = keyboard_loc
+    left = int(left*image.shape[1])
+    top = int(top*image.shape[0])
+    right = int(right*image.shape[1])
+    bottom = int(bottom*image.shape[0])
 
     y_white = bottom - (bottom-top)//4
     y_black = top + (1*(bottom-top))//3
@@ -40,9 +44,9 @@ def segment_keys(image, key_matcher):
 
     midi_boxes = []
     for i, b in enumerate(boxes):
-        midi_boxes.append((labeled_keys[i][2], 60 + i - c_idx, b))
+        midi_boxes.append([labeled_keys[i][2], 60 + i - c_idx, b])
         
-    return (left, top, right, bottom), black_lightness, midi_boxes
+    return midi_boxes
 
 def mean_lightness(image, y):
     # average brightness of white keys

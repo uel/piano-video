@@ -156,13 +156,10 @@ class YoloMatcher:
         self.model = YOLO("models/yolo_detection.pt")
 
     def ContainsKeyboard(self, img):
-        # reshape to max 640x640
-        if img.shape[0] > 640 or img.shape[1] > 640:
-            scale_factor = 640 / max(img.shape[0], img.shape[1])
-            img = cv2.resize(img, (0, 0), fx=scale_factor, fy=scale_factor)
+
         result = self.model.predict(img, verbose=False, imgsz=640, conf=0.5)[0].boxes
         if len(result.conf) > 0:
-            return list(map(int, result.xyxy[0].tolist()))
+            return result.xyxyn[0].tolist()
         else:
             return None
 
