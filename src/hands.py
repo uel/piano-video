@@ -116,7 +116,7 @@ def fill_gaps(hand_landmarks, max_gap_size=15):
 
 
 if __name__ == "__main__":
-    cap = cv2.VideoCapture("data/0_raw/all_videos/Erik C 'Piano Man'/8xJdM4S-fko.mp4")
+    cap = cv2.VideoCapture("data/videos/Erik C 'Piano Man'/8xJdM4S-fko.mp4")
     hands = landmarker()
     fps = int(cap.get(cv2.CAP_PROP_FPS))
 
@@ -151,5 +151,5 @@ if __name__ == "__main__":
     print(f'Coverage of frames with two hands: {coverage}%')
 
     # import file_io
-    # landmarks = file_io.read_landmarks(r"data\1_intermediate\hand_landmarks\nc29R1xYmjQ.bin")
+    # landmarks = file_io.read_landmarks(r"data\hand_landmarks\nc29R1xYmjQ.bin")
     # fill_gaps(landmarks)

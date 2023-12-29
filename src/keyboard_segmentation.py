@@ -280,11 +280,11 @@ def get_key_masks(white_key_mask, midi_boxes):
 
 
 if __name__ == "__main__":
-    import key_matcher
+    import keyboard_detection
     import os
-    #background_path = "data/1_intermediate/background/-cVFo4ujq9k.png"
-    #background_path = "data/1_intermediate/background/scarlatti.png"
-    background_dir = "data/1_intermediate/background/"
+    #background_path = "data/background/-cVFo4ujq9k.png"
+    #background_path = "data/background/scarlatti.png"
+    background_dir = "data/background/"
     for filename in os.listdir(background_dir):
         # filename= "tdGW5R7xDxg.png"
         # VISUALIZE=True
@@ -295,7 +295,7 @@ if __name__ == "__main__":
         # cv2.imshow('mask', cv2.resize(mask*255, (0, 0), fx=2, fy=2))
         # cv2.waitKey(0)
         # try:
-        matcher = key_matcher.YoloMatcher()
+        matcher = keyboard_detection.YoloMatcher()
         midi_boxes, masks = segment_keys(image, matcher)
         # image = draw_boxes(image, midi_boxes)
         # except Exception as e:

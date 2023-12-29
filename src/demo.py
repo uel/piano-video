@@ -97,16 +97,16 @@ def play_demo(video_path, show=True, save=False, skip_non_piano=False, truth_mid
     cv2.destroyAllWindows()
 
 if __name__ == "__main__":
-    video_path = "data/0_raw/all_videos/Jane/ykxAS-P_zHI.webm"
-    video_path = "data/0_raw/all_videos/Jane/ykxAS-P_zHI.webm"
-    video_path = "data/0_raw/all_videos/Paul Barton/s2_9g-dAnT0.mp4"
+    video_path = "data/videos/Jane/ykxAS-P_zHI.webm"
+    video_path = "data/videos/Jane/ykxAS-P_zHI.webm"
+    video_path = "data/videos/Paul Barton/s2_9g-dAnT0.mp4"
     video_path = "demo/sections_test.mp4"
-    video_path = r"C:\Users\danif\s\BP\data\0_raw\all_videos\Paul Barton\NLPxfEMfnVM.mp4"
-    video_path = "demo/scarlatti.mp4"
-    video_path = "data/0_raw/all_videos/Erik C 'Piano Man'/8xJdM4S-fko.mp4"
+    video_path = r"C:\Users\danif\s\BP\data\videos\Paul Barton\NLPxfEMfnVM.mp4"
+    video_path = "data/videos/Erik C 'Piano Man'/8xJdM4S-fko.mp4"
     video_path = "recording/rec3.mp4"
-    video_path = "data/0_raw/all_videos/flowkey – Learn piano/zWULIrqQPEk.mp4"
-    video_path = "data/0_raw/all_videos/Jane/XYFZFlDK2ko.webm"
-    video_path = "data/0_raw/all_videos/Paul Barton/nc29R1xYmjQ.mp4"
+    video_path = "data/videos/flowkey – Learn piano/zWULIrqQPEk.mp4"
+    video_path = "data/videos/Jane/XYFZFlDK2ko.webm"
+    video_path = "data/videos/Paul Barton/nc29R1xYmjQ.mp4"
+    video_path = "demo/scarlatti.mp4"
     play_demo(video_path)
     # play_demo(video_path, truth_midi_path="recording/rec3_fingers_truth.json")

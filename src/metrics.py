@@ -47,8 +47,8 @@ def ShiftIntervals(notes, shift):
 
 
 if __name__ == "__main__":
-    # file1 = "data/1_intermediate/fingers/scarlatti.json"
-    # file2 = "data/1_intermediate/transcribed_midi/scarlatti.json"
+    # file1 = "data/fingers/scarlatti.json"
+    # file2 = "data/transcribed_midi/scarlatti.json"
 
     file1 = "recording/rec3_fingers_truth.json"
     file2 = "recording/rec3_estimate2.json"

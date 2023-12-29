@@ -1,21 +1,28 @@
-import time
-t0 = time.time()
-import random
 from typing import Callable
 import numpy as np
-import cv2
-from intervaltree import IntervalTree
 import os
 import json
 import logging
-import file_io
 from functools import cached_property
 
+import file_io
+import setup
+
+import cv2
+from intervaltree import IntervalTree
+
 class PianoVideo():
-    def __init__(self, path, cache_path="data/1_intermediate", max_shape=640) -> None:
+    setup_complete = False
+
+    def __init__(self, path, data_path="data", max_shape=640) -> None:
         self.path = path
-        self.cache_path = cache_path
-        self.file_name = os.path.basename(path).split('.')[0]
+        self.data_path = data_path
+        self.file_name = os.path.basename(path).split('.')[0] # used as identifier
+
+        if not PianoVideo.setup_complete:
+            setup.setup_check()
+            PianoVideo.setup_complete = True
+
         cap = cv2.VideoCapture(self.path)
 
         if not cap.isOpened():
@@ -29,27 +36,27 @@ class PianoVideo():
 
     @cached_property
     def detector(self):
-        from key_matcher import FeatureKeyMatcher, KeyMatcher, YoloMatcher
-        return YoloMatcher()
+        from keyboard_detection import KeyboardDetector
+        return KeyboardDetector(self.max_shape)
 
     @cached_property
     def audio_path(self):
-        ''''''
-        if os.path.exists(f"{self.cache_path}/audio/{self.file_name}.mp3"):
-            return f"{self.cache_path}/audio/{self.file_name}.mp3"
+        '''Extracts audio from video and returns path to audio file'''
+        if os.path.exists(f"{self.data_path}/audio/{self.file_name}.mp3"):
+            return f"{self.data_path}/audio/{self.file_name}.mp3"
         
-        os.system(f'ffmpeg -hide_banner -loglevel error -i "{self.path}" "{self.cache_path}/audio/{self.file_name}.mp3"')
+        os.system(f'ffmpeg -hide_banner -loglevel error -i "{self.path}" "{self.data_path}/audio/{self.file_name}.mp3"')
         
-        return f"{self.cache_path}/audio/{self.file_name}.mp3"
+        return f"{self.data_path}/audio/{self.file_name}.mp3"
 
     @cached_property
     def sections(self):
-        if os.path.exists(f"{self.cache_path}/sections/{self.file_name}.json"):
-                with open(f"{self.cache_path}/sections/{self.file_name}.json", 'r') as f:
+        if os.path.exists(f"{self.data_path}/sections/{self.file_name}.json"):
+                with open(f"{self.data_path}/sections/{self.file_name}.json", 'r') as f:
                     return IntervalTree.from_tuples(json.load(f))
 
         _sections = self.find_intervals(self.detector.ContainsKeyboard)
-        with open(f"{self.cache_path}/sections/{self.file_name}.json", 'w') as f:
+        with open(f"{self.data_path}/sections/{self.file_name}.json", 'w') as f:
             json.dump(list(_sections), f)
 
         return _sections
@@ -57,8 +64,8 @@ class PianoVideo():
     @cached_property
     def hand_landmarks(self):
         import hands
-        if os.path.exists(f"{self.cache_path}/hand_landmarks/{self.file_name}.bin"):
-            landmarks = file_io.read_landmarks(f"{self.cache_path}/hand_landmarks/{self.file_name}.bin")
+        if os.path.exists(f"{self.data_path}/hand_landmarks/{self.file_name}.bin"):
+            landmarks = file_io.read_landmarks(f"{self.data_path}/hand_landmarks/{self.file_name}.bin")
             return hands.fill_gaps(landmarks)
             # return landmarks
         
@@ -67,11 +74,12 @@ class PianoVideo():
             for i, frame in self.get_video(): # frame must be in mp format
                 left_hand, right_hand = landmarker.detect(landmarker, frame, (1000*i)//self.fps)
                 _hand_landmarks.append((i, left_hand, right_hand))
-        file_io.write_landmarks(f"{self.cache_path}/hand_landmarks/{self.file_name}.bin", _hand_landmarks)
+        file_io.write_landmarks(f"{self.data_path}/hand_landmarks/{self.file_name}.bin", _hand_landmarks)
         
         # return _hand_landmarks
         return hands.fill_gaps(_hand_landmarks)
     
+    @property
     def hand_landmarker(self):
         # generator function that returns empty list if no hand landmarks
         def landmarks_generator():
@@ -88,8 +96,8 @@ class PianoVideo():
 
     @cached_property
     def transcribed_midi(self):
-        if os.path.exists(f"{self.cache_path}/transcribed_midi/{self.file_name}.json"):
-            with open(f"{self.cache_path}/transcribed_midi/{self.file_name}.json", 'r') as f:
+        if os.path.exists(f"{self.data_path}/transcribed_midi/{self.file_name}.json"):
+            with open(f"{self.data_path}/transcribed_midi/{self.file_name}.json", 'r') as f:
                 return IntervalTree.from_tuples(json.load(f))
 
         import transcription
@@ -101,7 +109,7 @@ class PianoVideo():
             if onset == offset: continue # prevent null intervals in interval tree, TODO: minimal interval length?
             self._transcribed_midi.append([onset, offset, [note["midi_note"], note["velocity"]]])
 
-        with open(f"{self.cache_path}/transcribed_midi/{self.file_name}.json", 'w') as f:
+        with open(f"{self.data_path}/transcribed_midi/{self.file_name}.json", 'w') as f:
             json.dump(self._transcribed_midi, f)
 
         return IntervalTree.from_tuples(self._transcribed_midi)
@@ -182,9 +190,9 @@ class PianoVideo():
 
     @cached_property
     def background(self):
-        '''Gets the frame of the piano using mediapipe hand landmarks'''
-        if os.path.exists(f"{self.cache_path}/background/{self.file_name}.png"):
-            return cv2.imread(f"{self.cache_path}/background/{self.file_name}.png")
+        '''Gets the frame of the piano using hand landmarks'''
+        if os.path.exists(f"{self.data_path}/background/{self.file_name}.png"):
+            return cv2.imread(f"{self.data_path}/background/{self.file_name}.png")
 
         frames = []
         non_nan_counts = np.zeros((self.width,)) # make sure there are no NaNs in result
@@ -233,7 +241,7 @@ class PianoVideo():
         if np.isnan(_background).any():
             logging.warning(f"NaN values in {self.file_name} background")
 
-        cv2.imwrite(f"{self.cache_path}/background/{self.file_name}.png", _background)
+        cv2.imwrite(f"{self.data_path}/background/{self.file_name}.png", _background)
 
         return _background
     
@@ -249,8 +257,8 @@ class PianoVideo():
     
     @cached_property
     def keys(self):
-        if os.path.exists(f"{self.cache_path}/keys/{self.file_name}.json"):
-            with open(f"{self.cache_path}/keys/{self.file_name}.json", 'r') as f:
+        if os.path.exists(f"{self.data_path}/keys/{self.file_name}.json"):
+            with open(f"{self.data_path}/keys/{self.file_name}.json", 'r') as f:
                 return json.load(f) 
             
         from fingers import finger_notes
@@ -270,15 +278,15 @@ class PianoVideo():
         for key in keys:
             key[1] += -best_shift*12 # -best_shift because transcribed midi had to be shifted by best_shift
 
-        with open(f"{self.cache_path}/keys/{self.file_name}.json", 'w') as f:
+        with open(f"{self.data_path}/keys/{self.file_name}.json", 'w') as f:
             json.dump([keyboard_loc, keys], f)
 
         return keyboard_loc, keys
     
     @cached_property
     def fingers(self):
-        if os.path.exists(f"{self.cache_path}/fingers/{self.file_name}.json"):
-            with open(f"{self.cache_path}/fingers/{self.file_name}.json", 'r') as f:
+        if os.path.exists(f"{self.data_path}/fingers/{self.file_name}.json"):
+            with open(f"{self.data_path}/fingers/{self.file_name}.json", 'r') as f:
                 return IntervalTree.from_tuples(json.load(f))
 
         from fingers import remove_outliers, finger_notes
@@ -288,7 +296,7 @@ class PianoVideo():
         best_notes, _ = finger_notes(self.transcribed_midi, self.hand_landmarker, keys)
         self._fingers = remove_outliers(best_notes, keys)
 
-        with open(f"{self.cache_path}/fingers/{self.file_name}.json", 'w') as f:
+        with open(f"{self.data_path}/fingers/{self.file_name}.json", 'w') as f:
             json.dump(list(sorted(self._fingers)), f)
 
         return self._fingers
@@ -296,17 +304,17 @@ class PianoVideo():
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
-    # video = PianoVideo("demo/scarlatti.mp4")
-    # video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\Erik C 'Piano Man'\gBMmUVzvl2U.mp4")
-    # video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\Liberty Park Music\3psRRVgGYdc.mp4")
-    # video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\Paul Barton\NLPxfEMfnVM.mp4")
-    # video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\Jane\2cz5qP36g_Y.webm")
+    video = PianoVideo("demo/scarlatti.mp4")
+    # video = PianoVideo(r"C:\Users\danif\s\BP\data\videos\Erik C 'Piano Man'\gBMmUVzvl2U.mp4")
+    # video = PianoVideo(r"C:\Users\danif\s\BP\data\videos\Liberty Park Music\3psRRVgGYdc.mp4")
+    # video = PianoVideo(r"C:\Users\danif\s\BP\data\videos\Paul Barton\NLPxfEMfnVM.mp4")
+    # video = PianoVideo(r"C:\Users\danif\s\BP\data\videos\Jane\2cz5qP36g_Y.webm")
 
-    video = PianoVideo(r"C:\Users\danif\s\BP\data\0_raw\all_videos\Jane\XYFZFlDK2ko.webm")
+    # video = PianoVideo(r"C:\Users\danif\s\BP\data\videos\Jane\XYFZFlDK2ko.webm")
     # video.hand_landmarks
     # video = PianoVideo(r"C:\Users\danif\s\BP\recording\rec3.mp4")
     # video = PianoVideo(r"C:\Users\danif\s\BP\demo\sections_test.mp4")
-    video.keys
+    video.transcribed_midi
     # pass
     # sections = video.sections
     # midi_boxes, masks = video.key_segments
