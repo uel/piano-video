@@ -5,6 +5,7 @@ __pycache__/
 .*
 data/**
 models/*
+!models/piano_detection.pt
 report/*
 demo/*
 recording/*

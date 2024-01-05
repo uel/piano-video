@@ -20,7 +20,7 @@ class PianoVideo():
         self.file_name = os.path.basename(path).split('.')[0] # used as identifier
 
         if not PianoVideo.setup_complete:
-            setup.setup_check()
+            setup.setup_check(data_path)
             PianoVideo.setup_complete = True
 
         cap = cv2.VideoCapture(self.path)
@@ -55,7 +55,7 @@ class PianoVideo():
                 with open(f"{self.data_path}/sections/{self.file_name}.json", 'r') as f:
                     return IntervalTree.from_tuples(json.load(f))
 
-        _sections = self.find_intervals(self.detector.ContainsKeyboard)
+        _sections = self.find_intervals(self.detector.DetectKeyboard)
         with open(f"{self.data_path}/sections/{self.file_name}.json", 'w') as f:
             json.dump(list(_sections), f)
 
@@ -197,7 +197,7 @@ class PianoVideo():
         frames = []
         non_nan_counts = np.zeros((self.width,)) # make sure there are no NaNs in result
         frame_count = 0
-        landmarks = self.hand_landmarker()
+        landmarks = self.hand_landmarker
         handc = 0
         for i, frame in self.get_video():
             landmark_result = next(landmarks)
@@ -234,7 +234,8 @@ class PianoVideo():
                 non_nan_counts += not_nan
 
         if len(frames) == 0:
-            raise Exception("No frames with hands found")
+            return None
+            # raise Exception("No frames with hands found")
 
         _background = np.nanmedian(frames, axis=(0)).astype(np.uint8)
 
