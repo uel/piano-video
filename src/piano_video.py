@@ -28,7 +28,7 @@ class PianoVideo():
         if not cap.isOpened():
             raise FileNotFoundError()
 
-        self.fps = int(cap.get(cv2.CAP_PROP_FPS))
+        self.fps = round(cap.get(cv2.CAP_PROP_FPS))
         self.width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self.frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -75,7 +75,8 @@ class PianoVideo():
                 left_hand, right_hand = landmarker.detect(landmarker, frame, (1000*i)//self.fps)
                 _hand_landmarks.append((i, left_hand, right_hand))
         file_io.write_landmarks(f"{self.data_path}/hand_landmarks/{self.file_name}.bin", _hand_landmarks)
-        
+
+        return _hand_landmarks
         # return _hand_landmarks
         return hands.fill_gaps(_hand_landmarks)
     
@@ -89,7 +90,7 @@ class PianoVideo():
                     yield self.hand_landmarks[current][1:]
                     current += 1
                 else:
-                    yield ()
+                    yield (None, None)
 
         return landmarks_generator()
 
@@ -252,7 +253,7 @@ class PianoVideo():
     
     def approx_keys(self):
         import keyboard_segmentation
-        keyboard_loc = self.detector.ContainsKeyboard(self.background)
+        keyboard_loc = self.detector.DetectKeyboard(self.background)
         keys = keyboard_segmentation.segment_keys(self.background, keyboard_loc)
         return keyboard_loc, keys
     
@@ -269,7 +270,7 @@ class PianoVideo():
         # iterate over onsents, get hand landmarks at that time
         min_dist = np.inf
         for i in  [0, -1, 1]:
-            _, dist = finger_notes(self.transcribed_midi, self.hand_landmarker(), keys, midi_id_offset=i)
+            _, dist = finger_notes(self.transcribed_midi, self.hand_landmarker, keys, midi_id_offset=i)
             if dist < min_dist:
                 min_dist = dist
                 best_shift = i 
