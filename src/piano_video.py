@@ -1,4 +1,3 @@
-from typing import Callable
 import numpy as np
 import os
 import json
@@ -52,14 +51,15 @@ class PianoVideo():
     @cached_property
     def sections(self):
         if os.path.exists(f"{self.data_path}/sections/{self.file_name}.json"):
-                with open(f"{self.data_path}/sections/{self.file_name}.json", 'r') as f:
-                    return IntervalTree.from_tuples(json.load(f))
+            with open(f"{self.data_path}/sections/{self.file_name}.json", 'r') as f:
+                _sections, position = json.load(f)
+                return IntervalTree.from_tuples(_sections), position
 
-        _sections = self.find_intervals(self.detector.DetectKeyboard)
+        _sections, position = self.find_intervals()
         with open(f"{self.data_path}/sections/{self.file_name}.json", 'w') as f:
-            json.dump(list(_sections), f)
-
-        return _sections
+            json.dump([list(_sections), position], f)
+    
+        return _sections, position
 
     @cached_property
     def hand_landmarks(self):
@@ -67,7 +67,6 @@ class PianoVideo():
         if os.path.exists(f"{self.data_path}/hand_landmarks/{self.file_name}.bin"):
             landmarks = file_io.read_landmarks(f"{self.data_path}/hand_landmarks/{self.file_name}.bin")
             return hands.fill_gaps(landmarks)
-            # return landmarks
         
         _hand_landmarks = []
         with hands.landmarker() as landmarker:
@@ -76,8 +75,6 @@ class PianoVideo():
                 _hand_landmarks.append((i, left_hand, right_hand))
         file_io.write_landmarks(f"{self.data_path}/hand_landmarks/{self.file_name}.bin", _hand_landmarks)
 
-        return _hand_landmarks
-        # return _hand_landmarks
         return hands.fill_gaps(_hand_landmarks)
     
     @property
@@ -138,12 +135,15 @@ class PianoVideo():
             i+=1
         cap.release()
 
-    def find_intervals(self, contains:Callable[[np.ndarray], bool], accuracy=5.):
+    def find_intervals(self, accuracy=5.):
         '''Finds intervals in video where contains is true given the frame'''
         intervals = IntervalTree()
+        keyboard_locs = []
         left = None
         for i, frame in self.get_video(accuracy):
-            if contains(frame):
+            keyboard_loc = self.detector.DetectKeyboard(frame)
+            if keyboard_loc:
+                keyboard_locs.append(keyboard_loc)
                 if left is None:
                     left = i
             else:
@@ -154,7 +154,7 @@ class PianoVideo():
         if left is not None and left != i:
             intervals[left:i] = True
 
-        if len(intervals) == 0: return intervals
+        if len(intervals) == 0: return intervals, None
 
         # Refining
         frame_acc = int(self.fps*accuracy)
@@ -165,11 +165,11 @@ class PianoVideo():
         for i, frame in self.get_video():
 
             if left - frame_acc < i < left:
-                if contains(frame):
+                if self.detector.DetectKeyboard(frame):
                     left = i
 
             if right-frame_acc < i:
-                if contains(frame):
+                if self.detector.DetectKeyboard(frame):
                     right = i
                 else:
                     new_intervals[left:right] = True
@@ -179,7 +179,10 @@ class PianoVideo():
                     
         new_intervals[left:right] = True
 
-        return new_intervals
+        keyboard_loc = list(np.mean(np.array(keyboard_locs), axis=0))
+        # TODO: Should return list of intervals for each varying keyboard location
+
+        return new_intervals, keyboard_loc
 
     def resize_frame(self, frame):
         '''Resizes frame to fit in a square with size max_shape while keeping aspect ratio'''
@@ -195,58 +198,57 @@ class PianoVideo():
         if os.path.exists(f"{self.data_path}/background/{self.file_name}.png"):
             return cv2.imread(f"{self.data_path}/background/{self.file_name}.png")
 
-        frames = []
-        non_nan_counts = np.zeros((self.width,)) # make sure there are no NaNs in result
-        frame_count = 0
+        sections, keyboard_loc = self.sections
+
+        if not sections or keyboard_loc is None:
+            return None
+        
+        _background = np.zeros((self.height, self.width, 3), dtype=np.uint64)
+        
+        keyboard_loc = [int(keyboard_loc[i]*_background.shape[(1+i)%2]) for i in range(4)]
+        counts = np.zeros(_background.shape, dtype=np.uint64)
+
         landmarks = self.hand_landmarker
-        handc = 0
+
         for i, frame in self.get_video():
             landmark_result = next(landmarks)
-            if not self.sections[i]: continue
-            #if len(landmark_result) < 2: continue
+            if not sections[i]: continue
 
-            frame = frame.astype(float)
-            not_nan = np.ones((self.width,), dtype=np.uint8) # 1 if not NaN, 0 if NaN
+            contains_hand = np.zeros((self.height, self.width), dtype=bool)
             for hand in landmark_result:
                 if hand is None: continue
-                handc+=1
                 left = np.inf
                 right = 0
+                top = np.inf
+                bottom = 0
+                
                 for landmark in hand:
-                    # Get horzizontal bounds of landmarks and replace horizontal area in image with Nan values
                     left = min(left, landmark[0])
                     right = max(right, landmark[0])
-                left = int(left*frame.shape[1])
-                left = max(0, left-10)
-                right = int(right*frame.shape[1])
-                right = min(frame.shape[1], right+10)
-                frame[:,left:right,:] = np.NAN
-                not_nan[left:right] = 0
+                    top = min(top, landmark[1])
+                    bottom = max(bottom, landmark[1])
+                
+                left = int(left * frame.shape[1])
+                left = max(0, left - 8)
+                right = int(right * frame.shape[1])
+                right = min(frame.shape[1], right + 8)
+                top = int(top * frame.shape[0])
+                top = max(0, top - 8)
+                bottom = int(bottom * frame.shape[0])
+                bottom = min(frame.shape[0], bottom + 8)
 
-            frame = self.resize_frame(frame)
+                contains_hand[top:bottom, left:right] = True
 
-            if np.any(not_nan & ( non_nan_counts <= (min(non_nan_counts)+5) )):
-                frame_count += 1
-                if len(frames) >= 200:
-                    if min(non_nan_counts) > 200: break
-                    frames[frame_count%200] = frame # counts are not being removed,
-                else:
-                    frames.append(frame)
-                non_nan_counts += not_nan
+            _background += frame * ~contains_hand[:,:,None]
+            counts += ~contains_hand[:,:,None]
 
-        if len(frames) == 0:
-            return None
-            # raise Exception("No frames with hands found")
-
-        _background = np.nanmedian(frames, axis=(0)).astype(np.uint8)
-
-        if np.isnan(_background).any():
-            logging.warning(f"NaN values in {self.file_name} background")
+        _background //= counts
+        _background = _background.astype(np.uint8)
 
         cv2.imwrite(f"{self.data_path}/background/{self.file_name}.png", _background)
 
         return _background
-    
+
     def keyboard_frame_count(self):
         '''Returns the number of frames where the keyboard is detected'''
         return sum([i.end-i.begin for i in self.sections])
@@ -306,17 +308,17 @@ class PianoVideo():
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
-    video = PianoVideo("demo/scarlatti.mp4")
-    # video = PianoVideo(r"C:\Users\danif\s\BP\data\videos\Erik C 'Piano Man'\gBMmUVzvl2U.mp4")
+    # video = PianoVideo("demo/scarlatti.mp4")
+    # video = PianoVideo(r"C:\Users\danif\s\BP\data\videos\Erik C 'Piano Man'\1IsVuI_bQhE.mp4")
     # video = PianoVideo(r"C:\Users\danif\s\BP\data\videos\Liberty Park Music\3psRRVgGYdc.mp4")
     # video = PianoVideo(r"C:\Users\danif\s\BP\data\videos\Paul Barton\NLPxfEMfnVM.mp4")
     # video = PianoVideo(r"C:\Users\danif\s\BP\data\videos\Jane\2cz5qP36g_Y.webm")
 
-    # video = PianoVideo(r"C:\Users\danif\s\BP\data\videos\Jane\XYFZFlDK2ko.webm")
+    video = PianoVideo(r"C:\Users\danif\s\BP\data\videos\Jane\-IrrlTWEqH0.webm")
     # video.hand_landmarks
     # video = PianoVideo(r"C:\Users\danif\s\BP\recording\rec3.mp4")
     # video = PianoVideo(r"C:\Users\danif\s\BP\demo\sections_test.mp4")
-    video.transcribed_midi
+    video.background
     # pass
     # sections = video.sections
     # midi_boxes, masks = video.key_segments

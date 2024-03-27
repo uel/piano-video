@@ -41,6 +41,7 @@ def GetFiles(input_folder):
     subfiles = glob.iglob(os.path.join(input_folder, '**/**'))
     files = glob.iglob(os.path.join(input_folder, '**'))
     all_files = sorted(list(set(list(subfiles) + list(files))))
+    all_files = [file for file in all_files if os.path.isfile(file)]
     return all_files
 
 if __name__ == "__main__":

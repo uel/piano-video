@@ -8,6 +8,14 @@ from draw import draw_landmarks_on_image, draw_boxes
 
 from keyboard_segmentation import get_key_masks, white_key_mask
 
+def resize(frame, max_shape=64):
+    if max(frame.shape) > max_shape:
+        scale = max_shape / max(frame.shape)
+        return cv2.resize(frame, (0, 0), fx=scale, fy=scale)
+    else:
+        return frame
+
+
 def play_demo(video_path, show=True, save=False, skip_non_piano=False, truth_midi_path=None):
     assert show or save, "Either show or save must be True"
     video = piano_video.PianoVideo(video_path)
@@ -21,7 +29,7 @@ def play_demo(video_path, show=True, save=False, skip_non_piano=False, truth_mid
     midi = video.fingers
     if truth_midi_path is not None:
         midi = IntervalTree().from_tuples(json.load(open(truth_midi_path, "r")))
-    landmarks = video.hand_landmarker()
+    landmarks = video.hand_landmarker
 
 
     # masks = get_key_masks(white_key_mask(background, lightness_thresh), keys)
@@ -38,16 +46,38 @@ def play_demo(video_path, show=True, save=False, skip_non_piano=False, truth_mid
     if save:
         out = cv2.VideoWriter('demo/'+video.file_name+".avi", cv2.VideoWriter_fourcc(*"MJPG"), 30, (640, 360))
 
+    p_landmarks = []
     i = 0
     while cap.isOpened():
         ret, frame = cap.read()
         if ret == True:
             hands = next(landmarks) 
-            print(i)
+
+            # print(i)
+            # new_frame = resize(frame, max_shape=512)
+            # bg = np.zeros((512, 512, 3), dtype=np.uint8)
+            # # insert into middle of bg
+            # bg[(512-new_frame.shape[0])//2:new_frame.shape[0] + (512-new_frame.shape[0])//2,:, :] = new_frame
 
             if skip_non_piano and not sections[i]:
                 i += 1
                 continue
+
+            left, right = hands
+            if left is None:
+                left = np.zeros(63, dtype=np.float32)
+            else:
+                left = np.array(left).flatten()
+
+            if right is None:
+                right = np.zeros(63, dtype=np.float32)
+            else:
+                right = np.array(right).flatten()
+            both = np.concatenate((left, right))
+            p_landmarks.append(both)
+
+            # cv2.imwrite("demo/512/"+str(i)+".png", bg)
+
 
             frame = cv2.resize(frame, dsize=(background.shape[1], background.shape[0]), interpolation=cv2.INTER_AREA)
 
@@ -82,14 +112,18 @@ def play_demo(video_path, show=True, save=False, skip_non_piano=False, truth_mid
                 out.write(frame)
 
             if show:
-                cv2.imshow('frame', cv2.resize(frame, dsize=(640, 360), fx=1, fy=1))
+                cv2.imshow('frame', cv2.resize(frame, dsize=(640, 360), fx=2, fy=2))
                 # if hands and bool(hands[0] is None) != bool(hands[1] is None):
                 #     cv2.waitKey(0)
                 # else: cv2.waitKey(1)
-                cv2.waitKey(1)
+                cv2.waitKey(0)
             i += 1
         else:
             break
+
+    # p_landmarks = np.array(p_landmarks)
+    # p_landmarks = torch.from_numpy(p_landmarks)
+    # torch.save(p_landmarks, "demo/small/landmarks.pt")
 
     cap.release()
     if save:
@@ -101,12 +135,13 @@ if __name__ == "__main__":
     video_path = "data/videos/Jane/ykxAS-P_zHI.webm"
     video_path = "data/videos/Paul Barton/s2_9g-dAnT0.mp4"
     video_path = "demo/sections_test.mp4"
-    video_path = r"C:\Users\danif\s\BP\data\videos\Paul Barton\NLPxfEMfnVM.mp4"
     video_path = "data/videos/Erik C 'Piano Man'/8xJdM4S-fko.mp4"
     video_path = "recording/rec3.mp4"
     video_path = "data/videos/flowkey – Learn piano/zWULIrqQPEk.mp4"
     video_path = "data/videos/Jane/XYFZFlDK2ko.webm"
-    video_path = "data/videos/Paul Barton/nc29R1xYmjQ.mp4"
     video_path = "demo/scarlatti.mp4"
+    video_path = "data/videos/Paul Barton/nc29R1xYmjQ.mp4"
+    video_path = "data/videos/Paul Barton/NLPxfEMfnVM.mp4"
+    video_path = "demo/barton.mp4"
     play_demo(video_path)
     # play_demo(video_path, truth_midi_path="recording/rec3_fingers_truth.json")

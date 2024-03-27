@@ -18,14 +18,11 @@ def segment_keys(image, keyboard_loc):
     right = int(right*image.shape[1])
     bottom = int(bottom*image.shape[0])
 
-    y_white = bottom - (bottom-top)//4
     y_black = top + (1*(bottom-top))//3
 
     black_lightness = mean_lightness(image, y_black) * WHITE_KEY_B_THRESH
-    white_lightness = mean_lightness(image, y_white) * WHITE_KEY_W_THRESH
 
     white_keys_b = white_key_mask(image, black_lightness)
-    white_keys_w = white_key_mask(image, white_lightness)
 
     black_bottom = get_black_key_bottom(white_keys_b, left, right, y_black)
 
