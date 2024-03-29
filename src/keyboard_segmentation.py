@@ -109,6 +109,10 @@ def get_black_key_groups(black_keys, avg_width):
     if group:
         black_key_groups.append(group)
 
+    if len(black_key_groups) == 0:
+        logging.warning("No black key groups found")
+        return [], -1
+
     # middle 2 group
     middle_2_group = -1
     for i in range(len(black_key_groups)//2-1, len(black_key_groups)):
@@ -225,6 +229,8 @@ def get_key_lines(white_key_mask, left, right, black_y):
     avg_width = np.mean([black_keys[i+1][0] - black_keys[i][1] for i in range(len(black_keys)-1)])
 
     b_key_groups, middle_2_group = get_black_key_groups(black_keys, avg_width)
+    if len(b_key_groups) == 0:
+        return []
 
     labeled_b_keys = get_black_keys(b_key_groups, middle_2_group)
     labeled_w_keys = get_white_keys(labeled_b_keys, left, right, avg_width)
@@ -277,26 +283,4 @@ def get_key_masks(white_key_mask, midi_boxes):
 
 
 if __name__ == "__main__":
-    import keyboard_detection
-    import os
-    #background_path = "data/background/-cVFo4ujq9k.png"
-    #background_path = "data/background/scarlatti.png"
-    background_dir = "data/background/"
-    for filename in os.listdir(background_dir):
-        # filename= "tdGW5R7xDxg.png"
-        # VISUALIZE=True
-        background_path = os.path.join(background_dir, filename)
-        print(background_path)
-        image = cv2.imread(background_path)
-        #mask = white_key_mask(image)
-        # cv2.imshow('mask', cv2.resize(mask*255, (0, 0), fx=2, fy=2))
-        # cv2.waitKey(0)
-        # try:
-        matcher = keyboard_detection.YoloMatcher()
-        midi_boxes, masks = segment_keys(image, matcher)
-        # image = draw_boxes(image, midi_boxes)
-        # except Exception as e:
-        #     print(background_path, e)
-        #     throw e
-
-        cv2.imwrite("data/visual/segments/"+filename, image)
+    pass

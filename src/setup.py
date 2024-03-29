@@ -24,6 +24,3 @@ def setup_check(data_path):
         print('Downloading hand landmarker model...')
         urlretrieve(mediapipe_hands, "models/hand_landmarker.task")
     
-
-
-

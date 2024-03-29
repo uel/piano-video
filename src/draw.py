@@ -100,9 +100,11 @@ def draw_boxes(image, midi_boxes, show=False):
             if i != len(midi_boxes)-1 and "#" not in midi_boxes[i+1][0]:
                 image = cv2.line (image, (right, top), (right, bottom), (0, 0, 255), 1)
             
-            fontsize = (avg_white_width/14.)*0.25
-            offset = int((avg_white_width/14.)*2.5)
-            cv2.putText(image, str(midi), (int(box[0]*image.shape[1])+offset, int(box[3]*image.shape[0])-offset), cv2.FONT_HERSHEY_SIMPLEX, fontsize, (0, 0, 255), 1)
+            fontsize = (avg_white_width*image.shape[1])*0.018
+            offset = int((avg_white_width*image.shape[1])*0.125)
+
+            octave = int(midi/12) - 1
+            cv2.putText(image, str(note)+str(octave), (int(box[0]*image.shape[1])+offset, int(box[3]*image.shape[0])-offset), cv2.FONT_HERSHEY_SIMPLEX, fontsize, (0, 0, 255), 1)
         else:
             image = cv2.rectangle(image, (left, top), (right, bottom) , (0, 0, 128), 1)
 

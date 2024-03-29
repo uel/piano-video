@@ -255,7 +255,13 @@ class PianoVideo():
     
     def approx_keys(self):
         import keyboard_segmentation
+        if self.background is None: 
+            return None, None
+        
         keyboard_loc = self.detector.DetectKeyboard(self.background)
+        if keyboard_loc is None: 
+            return None, None
+        
         keys = keyboard_segmentation.segment_keys(self.background, keyboard_loc)
         return keyboard_loc, keys
     
@@ -268,6 +274,8 @@ class PianoVideo():
         from fingers import finger_notes
 
         keyboard_loc, keys = self.approx_keys()
+        if keys is None: 
+            return None, None
 
         # iterate over onsents, get hand landmarks at that time
         min_dist = np.inf
@@ -309,16 +317,16 @@ class PianoVideo():
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
     # video = PianoVideo("demo/scarlatti.mp4")
-    # video = PianoVideo(r"C:\Users\danif\s\BP\data\videos\Erik C 'Piano Man'\1IsVuI_bQhE.mp4")
-    # video = PianoVideo(r"C:\Users\danif\s\BP\data\videos\Liberty Park Music\3psRRVgGYdc.mp4")
-    # video = PianoVideo(r"C:\Users\danif\s\BP\data\videos\Paul Barton\NLPxfEMfnVM.mp4")
-    # video = PianoVideo(r"C:\Users\danif\s\BP\data\videos\Jane\2cz5qP36g_Y.webm")
+    # video = PianoVideo(r"data/videos/Erik C 'Piano Man'/1IsVuI_bQhE.mp4")
+    # video = PianoVideo(r"data/videos/Liberty Park Music/3psRRVgGYdc.mp4")
+    # video = PianoVideo(r"data/videos/Paul Barton/NLPxfEMfnVM.mp4")
+    # video = PianoVideo(r"data/videos/Jane/2cz5qP36g_Y.webm")
 
-    video = PianoVideo(r"C:\Users\danif\s\BP\data\videos\Jane\-IrrlTWEqH0.webm")
+    video = PianoVideo(r"data/videos/Jane/J0ZT7T3rJFM.webm")
     # video.hand_landmarks
-    # video = PianoVideo(r"C:\Users\danif\s\BP\recording\rec3.mp4")
-    # video = PianoVideo(r"C:\Users\danif\s\BP\demo\sections_test.mp4")
-    video.background
+    # video = PianoVideo(r"recording/rec3.mp4")
+    # video = PianoVideo(r"demo/sections_test.mp4")
+    video.sections
     # pass
     # sections = video.sections
     # midi_boxes, masks = video.key_segments
