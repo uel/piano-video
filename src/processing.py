@@ -60,4 +60,4 @@ if __name__ == "__main__":
     for filename in files:
         print(filename)
         video = PianoVideo(filename)
-        video.background # saves file into data/background
+        video.sections # saves file into data/background

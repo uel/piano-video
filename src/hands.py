@@ -116,39 +116,20 @@ def fill_gaps(hand_landmarks, max_gap_size=15):
 
 
 if __name__ == "__main__":
-    cap = cv2.VideoCapture("data/videos/Erik C 'Piano Man'/8xJdM4S-fko.mp4")
-    hands = landmarker()
-    fps = int(cap.get(cv2.CAP_PROP_FPS))
+    # cap = cv2.VideoCapture("data/videos/Erik C 'Piano Man'/8xJdM4S-fko.mp4")
 
-    frame_count = 0
-    two_hands_count = 0
-
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
-
-        # Process the image and get the hand landmarks.
-        results = hands.detect(hands, frame, (1000*frame_count)//fps)
-
-        # Check if there are two hands.
-        if results and len(results) == 2:
-            two_hands_count += 1
-
-        if len(results) > 2:
-            print(f'Found {len(results.hand_landmarks)} hands')
+    import piano_video
+    pv = piano_video.PianoVideo("data/videos/Erik C 'Piano Man'/8xJdM4S-fko.mp4")
+    
+    landmarker = pv.hand_landmarker
+    for i, frame in pv.get_video():
+        result = next(landmarker)
 
         # Draw the landmarks on the frame
-        frame = draw_landmarks_on_image(frame, results)
+        frame = draw_landmarks_on_image(frame, result)
         cv2.imshow('hand_landmarks', frame)
+        cv2.imwrite(f"figures/hand_tracking.png", frame)
         cv2.waitKey(0)
-
-        frame_count += 1
-
-    cap.release()
-
-    coverage = (two_hands_count / frame_count) * 100
-    print(f'Coverage of frames with two hands: {coverage}%')
 
     # import file_io
     # landmarks = file_io.read_landmarks(r"data\hand_landmarks\nc29R1xYmjQ.bin")

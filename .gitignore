@@ -8,5 +8,7 @@ models/*
 !models/piano_detection.pt
 report/*
 demo/*
+evaluation/*
+figures/*
 recording/*
 notes.md

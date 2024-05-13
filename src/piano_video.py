@@ -55,7 +55,8 @@ class PianoVideo():
                 _sections, position = json.load(f)
                 return IntervalTree.from_tuples(_sections), position
 
-        _sections, position = self.find_intervals()
+        _sections, position = self.find_intervals(67/self.fps)
+
         with open(f"{self.data_path}/sections/{self.file_name}.json", 'w') as f:
             json.dump([list(_sections), position], f)
     
@@ -79,7 +80,7 @@ class PianoVideo():
     
     @property
     def hand_landmarker(self):
-        # generator function that returns empty list if no hand landmarks
+        # generator function returning a empty list if no hand landmarks
         def landmarks_generator():
             current = 0
             for i in range(0, self.frame_count+1):
@@ -100,17 +101,12 @@ class PianoVideo():
 
         import transcription
         result = transcription.transcribe_piano(self.audio_path)
-        self._transcribed_midi = []
-        for note in result:
-            onset = int(note["onset_time"]*self.fps)
-            offset = int(note["offset_time"]*self.fps)
-            if onset == offset: continue # prevent null intervals in interval tree, TODO: minimal interval length?
-            self._transcribed_midi.append([onset, offset, [note["midi_note"], note["velocity"]]])
+        self._transcribed_midi = transcription.dict_to_intervals(result, self.fps)
 
         with open(f"{self.data_path}/transcribed_midi/{self.file_name}.json", 'w') as f:
-            json.dump(self._transcribed_midi, f)
+            json.dump(list(self._transcribed_midi), f)
 
-        return IntervalTree.from_tuples(self._transcribed_midi)
+        return self._transcribed_midi
 
     def get_video(self, skip:float=0.):
         '''Generates frames from video evenly spaced by skip seconds'''
@@ -135,24 +131,62 @@ class PianoVideo():
             i+=1
         cap.release()
 
-    def find_intervals(self, accuracy=5.):
+
+    def find_intervals(self, accuracy):
         '''Finds intervals in video where contains is true given the frame'''
+        def IOU(b1, b2):
+            x1, y1, x2, y2 = b1
+            x3, y3, x4, y4 = b2
+
+            x5 = max(x1, x3)
+            y5 = max(y1, y3)
+            x6 = min(x2, x4)
+            y6 = min(y2, y4)
+
+            if x5 >= x6 or y5 >= y6:
+                return 0
+            
+            intersection = (x6-x5)*(y6-y5)
+            union = (x2-x1)*(y2-y1) + (x4-x3)*(y4-y3) - intersection
+
+            return intersection/union
+
+        def box_equal(b1, b2):
+            if b1 is None or b2 is None: return False
+            return IOU(b1, b2) > 0.95
+
         intervals = IntervalTree()
-        keyboard_locs = []
+        keyboard_boxes = []
+
         left = None
+        left_box = None
         for i, frame in self.get_video(accuracy):
             keyboard_loc = self.detector.DetectKeyboard(frame)
+
+            existing_box = False
+            for j, box in enumerate(keyboard_boxes):
+                if box_equal(box, keyboard_loc): 
+                    existing_box = True
+                    current_box = j
+                    break
+
+            if not existing_box:
+                if left is not None:
+                    intervals[left:i] = left_box # right i is first index with stride accuracy where DetectKeyboard is false
+                    left = None
+                    left_box = None
+
             if keyboard_loc:
-                keyboard_locs.append(keyboard_loc)
+                if not existing_box:
+                    keyboard_boxes.append(keyboard_loc)
+                    current_box = len(keyboard_boxes)-1
+
                 if left is None:
                     left = i
-            else:
-                if left is not None:
-                    intervals[left:i] = True # right is first index with stride accuracy where contains is false
-                    left = None
+                    left_box = current_box
 
         if left is not None and left != i:
-            intervals[left:i] = True
+            intervals[left:i] = left_box
 
         if len(intervals) == 0: return intervals, None
 
@@ -161,28 +195,39 @@ class PianoVideo():
         sorted_intervals = sorted(intervals)
         new_intervals = IntervalTree()
 
-        left, right, _ = sorted_intervals.pop(0)
+        left, right, box = sorted_intervals.pop(0)
         for i, frame in self.get_video():
-
-            if left - frame_acc < i < left:
-                if self.detector.DetectKeyboard(frame):
+            if left - frame_acc < i < left: # false after box first equality
+                if box_equal(keyboard_boxes[box], self.detector.DetectKeyboard(frame)):
                     left = i
 
             if right-frame_acc < i:
-                if self.detector.DetectKeyboard(frame):
-                    right = i
-                else:
-                    new_intervals[left:right] = True
-
-                    if sorted_intervals: left, right, _ = sorted_intervals.pop(0)
+                if not box_equal(keyboard_boxes[box], self.detector.DetectKeyboard(frame)):
+                    new_intervals[left:i] = box
+                    if sorted_intervals: left, right, box = sorted_intervals.pop(0)
                     else: break
                     
-        new_intervals[left:right] = True
+        new_intervals[left:i] = box
 
-        keyboard_loc = list(np.mean(np.array(keyboard_locs), axis=0))
-        # TODO: Should return list of intervals for each varying keyboard location
+        return new_intervals, keyboard_boxes
 
-        return new_intervals, keyboard_loc
+    @cached_property
+    def max_sections(self):
+        '''Returns the sections and keyboard bounding box of the most occuring keyboard scene in the video'''
+        sections, boxes = self.sections
+        if boxes is None: return None, None
+
+        box_counts = {}
+        for i in sections:
+            box_counts[i.data] = box_counts.get(i.data, 0) + i.end-i.begin
+        max_box = max(box_counts, key=box_counts.get)
+
+        new_sections = IntervalTree()
+        for i in sections:
+            if i.data == max_box:
+                new_sections[i.begin:i.end] = True
+
+        return new_sections, boxes[max_box]
 
     def resize_frame(self, frame):
         '''Resizes frame to fit in a square with size max_shape while keeping aspect ratio'''
@@ -198,7 +243,7 @@ class PianoVideo():
         if os.path.exists(f"{self.data_path}/background/{self.file_name}.png"):
             return cv2.imread(f"{self.data_path}/background/{self.file_name}.png")
 
-        sections, keyboard_loc = self.sections
+        sections, keyboard_loc = self.max_sections
 
         if not sections or keyboard_loc is None:
             return None
@@ -239,6 +284,9 @@ class PianoVideo():
 
                 contains_hand[top:bottom, left:right] = True
 
+                
+                frame[top:bottom, left:right] = 0
+
             _background += frame * ~contains_hand[:,:,None]
             counts += ~contains_hand[:,:,None]
 
@@ -251,19 +299,19 @@ class PianoVideo():
 
     def keyboard_frame_count(self):
         '''Returns the number of frames where the keyboard is detected'''
-        return sum([i.end-i.begin for i in self.sections])
+        return sum([i.end-i.begin for i in self.sections[0]])
     
     def approx_keys(self):
         import keyboard_segmentation
         if self.background is None: 
-            return None, None
+            return None
         
-        keyboard_loc = self.detector.DetectKeyboard(self.background)
-        if keyboard_loc is None: 
-            return None, None
+        keyboard_loc = self.max_sections[1]
+        if keyboard_loc is None:
+            return None
         
         keys = keyboard_segmentation.segment_keys(self.background, keyboard_loc)
-        return keyboard_loc, keys
+        return keys
     
     @cached_property
     def keys(self):
@@ -273,9 +321,9 @@ class PianoVideo():
             
         from fingers import finger_notes
 
-        keyboard_loc, keys = self.approx_keys()
+        keys = self.approx_keys()
         if keys is None: 
-            return None, None
+            return None
 
         # iterate over onsents, get hand landmarks at that time
         min_dist = np.inf
@@ -291,9 +339,9 @@ class PianoVideo():
             key[1] += -best_shift*12 # -best_shift because transcribed midi had to be shifted by best_shift
 
         with open(f"{self.data_path}/keys/{self.file_name}.json", 'w') as f:
-            json.dump([keyboard_loc, keys], f)
+            json.dump(keys, f)
 
-        return keyboard_loc, keys
+        return keys
     
     @cached_property
     def fingers(self):
@@ -303,7 +351,8 @@ class PianoVideo():
 
         from fingers import remove_outliers, finger_notes
 
-        _, keys = self.keys
+        keys = self.keys
+        if keys is None: return None
 
         best_notes, _ = finger_notes(self.transcribed_midi, self.hand_landmarker, keys)
         self._fingers = remove_outliers(best_notes, keys)
@@ -322,11 +371,12 @@ if __name__ == "__main__":
     # video = PianoVideo(r"data/videos/Paul Barton/NLPxfEMfnVM.mp4")
     # video = PianoVideo(r"data/videos/Jane/2cz5qP36g_Y.webm")
 
-    video = PianoVideo(r"data/videos/Jane/J0ZT7T3rJFM.webm")
+    # video = PianoVideo(r"data/videos/Jane/-IrrlTWEqH0.webm")
     # video.hand_landmarks
-    # video = PianoVideo(r"recording/rec3.mp4")
+    video = PianoVideo(r"evaluation/rec.mp4")
+
     # video = PianoVideo(r"demo/sections_test.mp4")
-    video.sections
+    video.fingers
     # pass
     # sections = video.sections
     # midi_boxes, masks = video.key_segments

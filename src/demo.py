@@ -20,8 +20,8 @@ def play_demo(video_path, show=True, save=False, skip_non_piano=False, truth_mid
     assert show or save, "Either show or save must be True"
     video = piano_video.PianoVideo(video_path)
     background = video.background
-    sections = video.sections
-    keyboard_box, keys = video.keys
+    keys = video.keys
+    sections, keyboard_box = video.max_sections
     keyboard_box = (int(keyboard_box[0]*background.shape[1]), 
                     int(keyboard_box[1]*background.shape[0]), 
                     int(keyboard_box[2]*background.shape[1]), 
@@ -41,7 +41,7 @@ def play_demo(video_path, show=True, save=False, skip_non_piano=False, truth_mid
 
     mask_dict = {keys[i][1]: masks[i] for i in range(len(keys))}
 
-
+        
     cap = cv2.VideoCapture(video_path)
     if save:
         out = cv2.VideoWriter('demo/'+video.file_name+".avi", cv2.VideoWriter_fourcc(*"MJPG"), 30, (640, 360))
@@ -136,12 +136,13 @@ if __name__ == "__main__":
     video_path = "data/videos/Paul Barton/s2_9g-dAnT0.mp4"
     video_path = "demo/sections_test.mp4"
     video_path = "data/videos/Erik C 'Piano Man'/8xJdM4S-fko.mp4"
-    video_path = "recording/rec3.mp4"
     video_path = "data/videos/flowkey – Learn piano/zWULIrqQPEk.mp4"
     video_path = "data/videos/Jane/XYFZFlDK2ko.webm"
     video_path = "demo/scarlatti.mp4"
     video_path = "data/videos/Paul Barton/nc29R1xYmjQ.mp4"
     video_path = "data/videos/Paul Barton/NLPxfEMfnVM.mp4"
     video_path = "demo/barton.mp4"
+    video_path = "data/videos/Erik C 'Piano Man'/1IsVuI_bQhE.mp4"
+    video_path = "evaluation/rec.mp4"
     play_demo(video_path)
     # play_demo(video_path, truth_midi_path="recording/rec3_fingers_truth.json")
